@@ -45,6 +45,15 @@ body {
     font-family: var(--font-primary);
     line-height: 1.6;
     overflow-x: hidden;
+    /* Sticky footer: short pages still pin the footer to the viewport bottom
+       so its placement/height reads the same across every page */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1 0 auto;
 }
 
 /* Custom Cursor */
@@ -879,6 +888,7 @@ h6 {
 
 .blog.first-section {
     padding-top: calc(var(--header-height) + 3rem);
+    padding-bottom: 4rem;
 }
 
 .blog .section-header {
@@ -1060,8 +1070,9 @@ h6 {
 /* Footer */
 .footer {
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 3rem 0 1.5rem;
+    padding: 2rem 0 1.25rem;
     background: #050505;
+    flex-shrink: 0;
 }
 
 /* Footer spans the full page width (logo hard-left, links hard-right) */
@@ -1133,7 +1144,7 @@ h6 {
 }
 
 .footer-bottom {
-    margin-top: 2rem;
+    margin-top: 1.25rem;
     text-align: center;
     font-family: var(--font-secondary);
     font-size: 0.7rem;
@@ -1315,7 +1326,7 @@ h6 {
 
     /* Keep the same logo-left / links-right footer, just fitted to the width */
     .footer {
-        padding: 2.5rem 0 1.25rem;
+        padding: 1.75rem 0 1.25rem;
     }
 
     .footer-container {
@@ -1339,6 +1350,6 @@ h6 {
     }
 
     .footer-bottom {
-        margin-top: 1.5rem;
+        margin-top: 1rem;
     }
 }
