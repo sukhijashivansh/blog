@@ -5,24 +5,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('.nav-link');
 
     if (hamburger && navList) {
+        const setMenu = (open) => {
+            navList.classList.toggle('active', open);
+            hamburger.classList.toggle('active', open);
+            hamburger.setAttribute('aria-expanded', String(open));
+        };
+
         hamburger.addEventListener('click', (e) => {
             e.stopPropagation();
-            navList.classList.toggle('active');
-            hamburger.classList.toggle('active');
+            setMenu(!navList.classList.contains('active'));
         });
 
         document.addEventListener('click', (e) => {
             if (!hamburger.contains(e.target) && !navList.contains(e.target) && navList.classList.contains('active')) {
-                navList.classList.remove('active');
-                hamburger.classList.remove('active');
+                setMenu(false);
+            }
+        });
+
+        // Close the menu on Escape for keyboard users
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && navList.classList.contains('active')) {
+                setMenu(false);
+                hamburger.focus();
             }
         });
 
         navLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                navList.classList.remove('active');
-                hamburger.classList.remove('active');
-            });
+            link.addEventListener('click', () => setMenu(false));
         });
     }
 

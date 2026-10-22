@@ -264,6 +264,9 @@ h6 {
     cursor: pointer;
     padding: 10px;
     /* larger touch target */
+    background: none;
+    border: 0;
+    color: inherit;
 }
 
 .bar {
