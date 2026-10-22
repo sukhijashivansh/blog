@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Mobile Menu Toggle (initialize first so it works even if Lenis fails)
+    // Mobile Menu Toggle
     const hamburger = document.querySelector('.hamburger');
     const navList = document.querySelector('.nav-list');
     const navLinks = document.querySelectorAll('.nav-link');
