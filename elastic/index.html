@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#150d07">
 <title>Snapback</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
 <style>
 /* Layout: one portrait wooden lane (canvas) under a slim walnut header that carries score, level, fire charge and lives; menu, pause and game over share one centred panel. */
@@ -24,10 +28,12 @@
   --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
 }
+*, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 [hidden] { display: none !important; }
 body {
+  margin: 0;
   background: var(--walnut-deep);
   color: var(--ivory);
   font-family: var(--body);
@@ -94,7 +100,7 @@ button { touch-action: manipulation; }
   background: rgba(12, 7, 4, 0.56);
 }
 .card {
-  width: 100%; max-width: 352px;
+  width: 100%; max-width: 398px;
   background: var(--panel); border: 1px solid var(--hair); border-radius: 14px;
   padding: 24px 22px 20px;
   display: grid; gap: 15px;
