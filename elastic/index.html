@@ -3,6 +3,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#150d07">
+<meta name="description" content="Knock the balls off the lane before they cross the brass line.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Snapback">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Snapback</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
 <style>
@@ -153,6 +160,9 @@ button { touch-action: manipulation; }
 }
 .link:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: 4px; }
 .card .auth-err { font-size: 13px; text-align: center; color: var(--ember); }
+.card .install-tip { font-size: 13.5px; line-height: 1.45; text-align: center; color: var(--ivory-soft); }
+.install-tip svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--brass); }
+.install-tip b { font-weight: 500; color: var(--ivory); }
 .final { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .final .stat b { height: 30px; font-size: 30px; }
 @media (max-height: 680px) {
@@ -218,6 +228,11 @@ button { touch-action: manipulation; }
           <button class="link" id="signOutBtn" type="button">Sign out</button>
         </div>
         <p class="auth-err" id="authErr" role="status" hidden></p>
+        <button class="ghost google" id="installBtn" type="button" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7.5v7M9 11.5l3 3 3-3"/></svg>
+          Add to home screen
+        </button>
+        <p class="install-tip" id="installTip" hidden>Tap the Share button <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1"/></svg> in Safari, then choose <b>Add to Home Screen</b>.</p>
       </div>
     </div>
 
@@ -1264,3 +1279,4 @@ init();
 })();
 </script>
 <script type="module" src="auth.js"></script>
+<script src="pwa.js"></script>
