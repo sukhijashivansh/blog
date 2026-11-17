@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#050505"/>
-  <text x="32" y="45" text-anchor="middle" fill="#f0f0f0"
-        font-family="Georgia, 'Playfair Display', serif" font-size="42" font-style="italic">S</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#050505" rx="12"/><text x="32" y="45" fill="#f0f0f0" font-family="Georgia, 'Playfair Display', serif" font-size="42" font-style="italic" text-anchor="middle">S</text></svg>
