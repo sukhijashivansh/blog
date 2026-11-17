@@ -1,5 +1,5 @@
-const CACHE = 'snapback-v1';
-const SHELL = ['/', '/auth.js', '/pwa.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/icon.svg'];
+const CACHE = 'snapback-v2';
+const SHELL = ['/', '/auth.js', '/pwa.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/icon.svg'];
 const CDN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)\//;
 
 self.addEventListener('install', e => {

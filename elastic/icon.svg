@@ -1,35 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="wood" x1="0" x2="1">
-      <stop offset="0" stop-color="#1c1109"/>
-      <stop offset="0.5" stop-color="#3a2414"/>
-      <stop offset="1" stop-color="#1c1109"/>
-    </linearGradient>
-    <radialGradient id="ball" cx="0.38" cy="0.32" r="0.72">
-      <stop offset="0" stop-color="#ff9a86"/>
-      <stop offset="0.28" stop-color="#d9412f"/>
-      <stop offset="0.72" stop-color="#8c1c13"/>
-      <stop offset="1" stop-color="#3f0905"/>
-    </radialGradient>
-    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#000" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="brass" x1="0" x2="0" y1="0" y2="1">
-      <stop offset="0" stop-color="#e6c88a"/>
-      <stop offset="1" stop-color="#b8904a"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" fill="url(#wood)"/>
-  <g stroke="#120a05" stroke-opacity="0.45" stroke-width="3" fill="none">
-    <path d="M112 0v512M196 0v512M316 0v512M400 0v512"/>
+<defs>
+  <radialGradient id="bg" cx="344" cy="112" r="460" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#ffcf73"/>
+    <stop offset="0.16" stop-color="#f08a2c"/>
+    <stop offset="0.45" stop-color="#8a3a12"/>
+    <stop offset="0.8" stop-color="#3a1a09"/>
+    <stop offset="1" stop-color="#1c0e06"/>
+  </radialGradient>
+  <radialGradient id="ball" cx="0.36" cy="0.3" r="0.75">
+    <stop offset="0" stop-color="#ffb3a1"/>
+    <stop offset="0.22" stop-color="#ee4a34"/>
+    <stop offset="0.65" stop-color="#a51f14"/>
+    <stop offset="1" stop-color="#4c0a05"/>
+  </radialGradient>
+  <linearGradient id="streak" x1="0" x2="1">
+    <stop offset="0" stop-color="#fff3d6" stop-opacity="0"/>
+    <stop offset="1" stop-color="#fff3d6" stop-opacity="0.9"/>
+  </linearGradient>
+  <linearGradient id="band" x1="0" x2="1">
+    <stop offset="0" stop-color="#c9894a"/>
+    <stop offset="0.5" stop-color="#f1c27f"/>
+    <stop offset="1" stop-color="#b8763a"/>
+  </linearGradient>
+  <mask id="wood"><path d="M0.0 253.0L0.0 93.5" stroke-width="68" stroke="#fff" fill="none" stroke-linecap="round"/><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="56" stroke="#fff" fill="none" stroke-linecap="round"/><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="56" stroke="#fff" fill="none" stroke-linecap="round"/></mask>
+  <filter id="drop" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="6" dy="12" stdDeviation="10" flood-color="#0d0603" flood-opacity="0.6"/></filter>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<g fill="#fff4dc" fill-opacity="0.07"><path d="M344 112L1244.0 112.0L1230.3 268.3Z"/><path d="M344 112L1189.7 419.8L1123.4 562.0Z"/><path d="M344 112L1033.4 690.5L922.5 801.4Z"/><path d="M344 112L794.0 891.4L651.8 957.7Z"/><path d="M344 112L500.3 998.3L344.0 1012.0Z"/><path d="M344 112L187.7 998.3L36.2 957.7Z"/><path d="M344 112L-106.0 891.4L-234.5 801.4Z"/><path d="M344 112L-345.4 690.5L-435.4 562.0Z"/><path d="M344 112L-501.7 419.8L-542.3 268.3Z"/><path d="M344 112L-556.0 112.0L-542.3 -44.3Z"/><path d="M344 112L-501.7 -195.8L-435.4 -338.0Z"/><path d="M344 112L-345.4 -466.5L-234.5 -577.4Z"/><path d="M344 112L-106.0 -667.4L36.2 -733.7Z"/><path d="M344 112L187.7 -774.3L344.0 -788.0Z"/><path d="M344 112L500.3 -774.3L651.8 -733.7Z"/><path d="M344 112L794.0 -667.4L922.5 -577.4Z"/><path d="M344 112L1033.4 -466.5L1123.4 -338.0Z"/><path d="M344 112L1189.7 -195.8L1230.3 -44.3Z"/></g>
+
+<g transform="translate(256 256) scale(1) translate(-256 -256)">
+  <!-- slingshot -->
+  <g transform="translate(196 236) rotate(16)" filter="url(#drop)">
+    <g fill="none" stroke-linecap="round"><path d="M0.0 253.0L0.0 93.5" stroke-width="78" stroke="#1a0c05"/><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="66" stroke="#1a0c05"/><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="66" stroke="#1a0c05"/></g>
+    <g mask="url(#wood)">
+      <rect x="-200" y="-200" width="400" height="600" fill="#6e4322"/>
+      <g fill="none" stroke-linecap="round">
+        <g transform="translate(12 6)" stroke="#3b210f"><path d="M0.0 253.0L0.0 93.5" stroke-width="52" /><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="40" /><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="40" /></g>
+        <g transform="translate(-11 -5)" stroke="#9a6534"><path d="M0.0 253.0L0.0 93.5" stroke-width="36" /><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="24" /><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="24" /></g>
+        <g transform="translate(-15 -8)" stroke="#d9a466" stroke-opacity="0.75"><path d="M0.0 253.0L0.0 93.5" stroke-width="19" /><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="7" /><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="7" /></g>
+        <g stroke="#2e190b" stroke-opacity="0.55" stroke-dasharray="46 14 80 22">
+          <g transform="translate(5 0)"><path d="M0.0 253.0L0.0 93.5" stroke-width="14" /><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="2" /><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="2" /></g><g transform="translate(-3 0)"><path d="M0.0 253.0L0.0 93.5" stroke-width="13.6" /><path d="M0.0 115.5C-22.0 35.8 -96.3 46.8 -99.0 -27.5" stroke-width="1.6" /><path d="M0.0 115.5C22.0 35.8 96.3 46.8 99.0 -27.5" stroke-width="1.6" /></g>
+        </g>
+      </g>
+      <!-- leather grip wrap -->
+      <g stroke="#24120a" stroke-width="9">
+        <line x1="-50" y1="164" x2="50" y2="136"/><line x1="-50" y1="186" x2="50" y2="158"/><line x1="-50" y1="208" x2="50" y2="180"/><line x1="-50" y1="230" x2="50" y2="202"/><line x1="-50" y1="252" x2="50" y2="224"/>
+      </g>
+      <g stroke="#7a4a2a" stroke-width="2.5" stroke-opacity="0.8">
+        <line x1="-50" y1="159" x2="50" y2="131"/><line x1="-50" y1="181" x2="50" y2="153"/><line x1="-50" y1="203" x2="50" y2="175"/><line x1="-50" y1="225" x2="50" y2="197"/><line x1="-50" y1="247" x2="50" y2="219"/>
+      </g>
+    </g>
+    <!-- brass collar where the arms meet the handle -->
+    <rect x="-38" y="87.5" width="76" height="18" rx="5" fill="#d2ae6a" stroke="#5a3d15" stroke-width="3"/>
+    <rect x="-34" y="90.5" width="68" height="4" rx="2" fill="#f4dfab" fill-opacity="0.85"/>
+    <!-- band, just snapped forward, with its leather pouch -->
+    <path d="M-99 -27.5 Q0 -97.5 99 -27.5" fill="none" stroke="#3a1c0a" stroke-width="15" stroke-linecap="round"/>
+    <path d="M-99 -27.5 Q0 -97.5 99 -27.5" fill="none" stroke="url(#band)" stroke-width="9" stroke-linecap="round"/>
+    <g fill="none" stroke="#fff4dc" stroke-linecap="round" stroke-opacity="0.55" stroke-width="4">
+      <path d="M-73 -61.5 Q0 -125.5 73 -61.5"/>
+      <path d="M-51 -89.5 Q0 -143.5 51 -89.5" stroke-opacity="0.3"/>
+    </g>
+    <ellipse cx="0" cy="-61.5" rx="30" ry="13" fill="#4a2410" stroke="#24100a" stroke-width="4"/>
+    <ellipse cx="-6" cy="-65.5" rx="14" ry="4" fill="#8a5232"/>
+    <circle cx="-99" cy="-27.5" r="15" fill="#2a160a"/><circle cx="-102" cy="-31.5" r="6" fill="#b07a44"/><circle cx="99" cy="-27.5" r="15" fill="#2a160a"/><circle cx="96" cy="-31.5" r="6" fill="#b07a44"/>
   </g>
-  <g stroke="#5a3a20" stroke-opacity="0.35" stroke-width="2" fill="none">
-    <path d="M150 0c8 120-10 260 4 512M258 0c-10 150 12 300-2 512M360 0c10 140-8 330 6 512"/>
+
+  <!-- speed streaks between the band and the ball -->
+  <g fill="url(#streak)" transform="rotate(-30 344 112)">
+    <rect x="129" y="61" width="141" height="10" rx="5"/>
+    <rect x="94" y="104" width="176" height="16" rx="8"/>
+    <rect x="139" y="153" width="131" height="10" rx="5"/>
   </g>
-  <rect x="0" y="372" width="512" height="10" fill="url(#brass)"/>
-  <ellipse cx="262" cy="352" rx="112" ry="22" fill="url(#shadow)"/>
-  <circle cx="256" cy="228" r="122" fill="url(#ball)"/>
-  <ellipse cx="208" cy="174" rx="40" ry="24" fill="#fff" fill-opacity="0.85" transform="rotate(-24 208 174)"/>
-  <circle cx="300" cy="188" r="9" fill="#fff" fill-opacity="0.55"/>
+  <!-- the ball -->
+  <g filter="url(#drop)">
+    <circle cx="344" cy="112" r="78" fill="url(#ball)"/>
+    <circle cx="344" cy="112" r="78" fill="none" stroke="#2a0503" stroke-opacity="0.55" stroke-width="5"/>
+    <path d="M281.6 147.1a78 78 0 0 0 117 21.060000000000002" fill="none" stroke="#ffb07a" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="312.8" cy="75.34" rx="31.200000000000003" ry="18.72" fill="#fff" fill-opacity="0.92" transform="rotate(-28 312.8 75.34)"/>
+    <circle cx="372.08" cy="82.36" r="7.800000000000001" fill="#fff" fill-opacity="0.6"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#fff6dc">
+    <path d="M452 214l7 19 19 7-19 7-7 19-7-19-19-7 19-7z"/>
+    <path d="M456 40l4 11 11 4-11 4-4 11-4-11-11-4 11-4z" fill-opacity="0.85"/>
+    <path d="M182 52l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill-opacity="0.7"/>
+  </g>
+</g>
 </svg>
