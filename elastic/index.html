@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
 <style>
-/* Layout: one portrait wooden lane (canvas) under a slim walnut header that carries the score; menu, pause and game over share one centred panel. */
+/* Layout: one portrait wooden lane (canvas) under a slim walnut header that carries score, level, fire charge and lives; menu, pause and game over share one centred panel. */
 :root {
   color-scheme: dark;
   --walnut-deep: #150d07;
@@ -13,13 +13,18 @@
   --brass: #d2ae6a;
   --brass-lo: #c39a52;
   --brass-hi: #e6c88a;
+  --ember: #f2a444;
+  --ember-lo: #c8742a;
+  --ember-hi: #ffd27a;
   --ink: #20140a;
-  --panel: rgba(24, 15, 9, 0.9);
+  --panel: rgba(24, 15, 9, 0.95);
   --hair: rgba(210, 174, 106, 0.34);
   --hair-soft: rgba(210, 174, 106, 0.16);
+  --track: rgba(239, 230, 212, 0.16);
   --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
 }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 [hidden] { display: none !important; }
 body {
@@ -30,89 +35,124 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
-#stage { position: relative; height: 100%; max-width: 560px; margin: 0 auto; overflow: hidden; background: var(--walnut); }
-#game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+button { touch-action: manipulation; }
+#stage { position: relative; height: 100%; max-width: 560px; margin: 0 auto; overflow: hidden; background: var(--walnut); touch-action: none; }
+#game { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
 #hud {
-  position: absolute; inset: 0 0 auto 0; height: 64px;
-  display: flex; align-items: center; gap: 22px;
+  position: absolute; top: 0; left: 0; right: 0; height: 64px;
+  display: flex; align-items: center;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   pointer-events: none;
 }
-.stat { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.stat small { font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
-.stat b { font: 600 23px/1 var(--display); color: var(--ivory); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 7px; }
+#hud > * + * { margin-left: 18px; }
+.stat { min-width: 0; }
+.stat small { display: block; font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
+.stat b { display: flex; align-items: baseline; height: 23px; margin-top: 5px; font: 600 23px/1 var(--display); color: var(--ivory); font-variant-numeric: tabular-nums; white-space: nowrap; }
 #hud .stat:first-child { min-width: 70px; }
-#combo { font-size: 14px; color: var(--brass); }
+#combo { margin-left: 7px; font-size: 14px; color: var(--brass); }
+.stat.fire b { align-items: center; }
+.meter { display: block; width: 56px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.meter i { display: block; width: 0; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--ember-lo), var(--ember)); transition: width 0.25s ease-out; }
+.stat.fire.ready small { color: var(--ember); }
+.stat.fire.ready .meter i { background: linear-gradient(90deg, var(--ember), var(--ember-hi)); animation: glow 0.8s ease-in-out infinite alternate; }
+@keyframes glow { from { opacity: 0.55; } to { opacity: 1; } }
 .spacer { flex: 1; }
-#lives { display: flex; gap: 6px; }
+#lives { display: flex; }
 #lives i {
-  width: 12px; height: 12px; border-radius: 50%;
+  width: 12px; height: 12px; border-radius: 50%; margin-left: 6px;
   background: radial-gradient(circle at 34% 30%, #ffffff 0, #c9ced6 22%, #7b8089 58%, #33363c 100%);
   transition: opacity 0.25s;
 }
+#lives i:first-child { margin-left: 0; }
 #lives i.gone { opacity: 0.16; }
 .icon-btn {
   pointer-events: auto; padding: 0;
-  width: 38px; height: 38px; border-radius: 10px;
+  width: 44px; height: 44px; border-radius: 11px;
   border: 1px solid var(--hair); background: rgba(18, 10, 6, 0.5); color: var(--ivory);
   display: grid; place-items: center; cursor: pointer;
 }
-.icon-btn svg { width: 19px; height: 19px; }
-.icon-btn .mute { display: none; }
-.icon-btn.muted .wave { display: none; }
-.icon-btn.muted .mute { display: block; }
-.icon-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
-@media (max-width: 370px) {
-  #hud { gap: 14px; }
-  .icon-btn { width: 34px; height: 34px; }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn:focus-visible, .btn:focus-visible, .ghost:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+@media (max-width: 372px) { #hud > * + * { margin-left: 11px; } }
+@media (max-width: 338px) {
+  #hud > * + * { margin-left: 8px; }
+  #hud .stat:first-child { min-width: 54px; }
+  .meter { width: 44px; }
 }
 
 #overlay {
-  position: absolute; inset: 0; display: grid; place-items: center; overflow-y: auto;
-  padding-block: 20px;
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: grid; place-items: center; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  padding-top: 16px; padding-bottom: 16px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  background: rgba(12, 7, 4, 0.5);
+  background: rgba(12, 7, 4, 0.56);
 }
 .card {
-  width: min(352px, 100%);
+  width: 100%; max-width: 352px;
   background: var(--panel); border: 1px solid var(--hair); border-radius: 14px;
-  padding: 26px 24px 22px;
-  display: flex; flex-direction: column; gap: 16px;
+  padding: 24px 22px 20px;
+  display: grid; gap: 15px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 .card h1 {
-  margin: 0; padding-bottom: 14px; border-bottom: 1px solid var(--hair);
+  margin: 0; padding-bottom: 13px; border-bottom: 1px solid var(--hair);
   font: 600 24px/1.15 var(--display); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ivory); text-wrap: balance;
 }
 .card p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ivory-soft); }
-.how { margin: 0; display: grid; gap: 10px; }
-.how div { display: grid; grid-template-columns: 50px 1fr; gap: 10px; align-items: baseline; }
+.how { margin: 0; display: grid; gap: 9px; }
+.how div { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; }
 .how dt { font: 600 11px/1.4 var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--brass); }
-.how dd { margin: 0; min-width: 0; font-size: 14px; line-height: 1.45; color: var(--ivory-soft); }
+.how dd { margin: 0; min-width: 0; font-size: 14px; line-height: 1.42; color: var(--ivory-soft); }
+.how .hot dt { color: var(--ember); }
 .legend {
-  list-style: none; margin: 0; padding: 14px 0; border-block: 1px solid var(--hair-soft);
+  list-style: none; margin: 0; padding: 13px 0; border-top: 1px solid var(--hair-soft); border-bottom: 1px solid var(--hair-soft);
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
 }
-.legend li { display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; font: 500 13px/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ivory); }
+.legend li { display: grid; justify-items: center; gap: 7px; text-align: center; font: 500 13px/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ivory); }
 .legend canvas { width: 38px; height: 38px; }
 .legend small { display: block; margin-top: 2px; font: 400 12.5px/1.3 var(--body); letter-spacing: 0; text-transform: none; color: var(--ivory-dim); }
 .btn {
-  width: 100%; padding: 15px 20px; border: 0; border-radius: 9px; cursor: pointer;
+  width: 100%; min-height: 48px; padding: 15px 20px; border: 0; border-radius: 9px; cursor: pointer;
   font: 600 15px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink);
   background: linear-gradient(var(--brass-hi), var(--brass-lo));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 .btn:active { filter: brightness(0.88); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.ghost {
+  width: 100%; min-height: 44px; padding: 12px 20px; border: 1px solid var(--hair); border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--ivory-soft);
+  font: 500 13px/1 var(--display); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.ghost:active { background: var(--hair-soft); }
 .best { font-size: 13px; color: var(--ivory-dim); text-align: center; }
 .best:empty { display: none; }
 .final { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.final .stat b { font-size: 30px; }
+.final .stat b { height: 30px; font-size: 30px; }
+@media (max-height: 680px) {
+  .card { padding: 18px 20px 16px; gap: 11px; }
+  .card h1 { font-size: 21px; padding-bottom: 10px; }
+  .card p { font-size: 14px; line-height: 1.4; }
+  .how { gap: 6px; }
+  .how dd { font-size: 13px; line-height: 1.36; }
+  .legend { padding: 9px 0; }
+  .legend canvas { width: 32px; height: 32px; }
+  .btn { padding: 13px 20px; }
+}
+#rotate {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: none; place-items: center; padding: 24px; text-align: center;
+  background: var(--walnut-deep); color: var(--ivory-soft);
+  font: 500 14px/1.5 var(--display); letter-spacing: 0.14em; text-transform: uppercase;
+}
+@media (orientation: landscape) and (max-height: 430px) { #rotate { display: grid; } }
+@media (prefers-reduced-motion: reduce) { .stat.fire.ready .meter i { animation: none; } .meter i { transition: none; } }
 </style>
 
 <div id="stage">
@@ -121,11 +161,9 @@ body {
   <div id="hud">
     <div class="stat"><small>Score</small><b><span id="score">0</span><span id="combo" hidden></span></b></div>
     <div class="stat"><small>Level</small><b id="level">1</b></div>
+    <div class="stat fire" id="fireStat"><small id="fireLabel">Fire</small><b><span class="meter" id="fireMeter" role="progressbar" aria-label="Fireball charge" aria-valuemin="0" aria-valuemax="15" aria-valuenow="0"><i id="fireFill"></i></span></b></div>
     <div class="spacer"></div>
     <div id="lives" role="img" aria-label="3 lives left"><i></i><i></i><i></i></div>
-    <button class="icon-btn" id="soundBtn" type="button" aria-label="Sound">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path class="wave" d="M15.5 9.2a4 4 0 0 1 0 5.6M18 6.8a7.4 7.4 0 0 1 0 10.4"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
-    </button>
     <button class="icon-btn" id="pauseBtn" type="button" aria-label="Pause">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8.5 6v12M15.5 6v12"/></svg>
     </button>
@@ -139,19 +177,22 @@ body {
         <div><dt>Pull</dt><dd>Drag back anywhere on the lane and let go. A longer pull is a faster shot.</dd></div>
         <div><dt>Move</dt><dd>Slide along the track at the bottom to shift the slingshot.</dd></div>
         <div><dt>Bank</dt><dd>Shots bounce off the side rails. A bank hit scores double.</dd></div>
+        <div class="hot"><dt>Fire</dt><dd>Every 15 shots that hit load a fireball. It blasts every ball near where it lands.</dd></div>
       </dl>
       <ul class="legend">
         <li><canvas data-ball="red" width="96" height="96"></canvas><span>Glazed<small>1 hit</small></span></li>
         <li><canvas data-ball="stone" width="96" height="96"></canvas><span>Stone<small>2 hits</small></span></li>
         <li><canvas data-ball="bubble" width="96" height="96"></canvas><span>Bubble<small>harmless</small></span></li>
       </ul>
-      <button class="btn" id="playBtn" type="button">Play</button>
+      <button class="btn" id="playBtn" type="button" disabled>Preparing the lane</button>
+      <button class="ghost sound-toggle" id="menuSound" type="button">Sound on</button>
       <div class="best" id="menuBest"></div>
     </div>
 
     <div class="card" id="pauseCard" hidden>
       <h1>Paused</h1>
       <button class="btn" id="resumeBtn" type="button">Resume</button>
+      <button class="ghost sound-toggle" id="pauseSound" type="button">Sound on</button>
     </div>
 
     <div class="card" id="overCard" hidden>
@@ -165,12 +206,14 @@ body {
       <button class="btn" id="againBtn" type="button">Play again</button>
     </div>
   </div>
+
+  <div id="rotate">Turn your phone upright to play</div>
 </div>
 
 <script>
 (() => {
 'use strict';
-const cv = document.getElementById('game'), ctx = cv.getContext('2d');
+const cv = document.getElementById('game'), ctx = cv.getContext('2d', { alpha: false });
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -178,9 +221,11 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+const drop = c => { if (c) c.width = c.height = 0; };          // hand canvas memory back straight away (iPhones are strict about it)
 const hexLin = h => { const n = parseInt(h.slice(1), 16); return [((n >> 16 & 255) / 255) ** 2.2, ((n >> 8 & 255) / 255) ** 2.2, ((n & 255) / 255) ** 2.2]; };
 const enc = c => { if (c > 0.8) c = 0.8 + 0.2 * (1 - Math.exp(-(c - 0.8) / 0.2)); return (c > 0 ? c : 0) ** 0.4545 * 255; };
 const n3 = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} } };
 function rr(g, x, y, w, h, r) {
   g.beginPath(); g.moveTo(x + r, y);
   g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r);
@@ -227,15 +272,24 @@ function env(rx, ry, rz, soft, power) {           // what a reflection ray sees:
   }
 }
 
-const SPR = 184, SR = 88;
+const SPR = 184, SR = 88, HS = SPR / (2 * SR);
+const HEAT = [[0, 60, 6, 0], [0.3, 176, 30, 4], [0.55, 240, 96, 10], [0.78, 255, 190, 60], [1, 255, 246, 190]];
 function ballSprite(kind, hex) {
   const c = mk(SPR, SPR), g = c.getContext('2d'), img = g.createImageData(SPR, SPR), d = img.data, alb = hex ? hexLin(hex) : null;
   for (let j = 0; j < SPR; j++) for (let i = 0; i < SPR; i++) {
     const x = (i + 0.5 - SPR / 2) / SR, y = (j + 0.5 - SPR / 2) / SR, rad = Math.hypot(x, y);
     const cov = clamp((1 - rad) * SR + 0.5, 0, 1); if (cov <= 0) continue;
     const kq = rad > 0.998 ? 0.998 / rad : 1, nx = x * kq, ny = y * kq, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-    const ndu = nx * UPV[0] + ny * UPV[1] + nz * UPV[2], rx = 2 * nz * nx, ry = 2 * nz * ny, rz = 2 * nz * nz - 1;
+    const ndu = nx * UPV[0] + ny * UPV[1] + nz * UPV[2], rx = 2 * nz * nx, ry = 2 * nz * ny, rz = 2 * nz * nz - 1, o = (j * SPR + i) * 4;
     let R, G, B, A = 1;
+    if (kind === 'fire') {                          // the fireball's core: it glows by itself, hottest toward the middle
+      const u = nx / (0.55 + nz), v = ny / (0.55 + nz);
+      const heat = clamp(0.18 + 0.62 * (vnoise(u * 3.4 + 2.3, v * 3.4 + 7.1) * 0.62 + vnoise((u * 0.8 + v * 0.6) * 8 + 4, (v * 0.8 - u * 0.6) * 8 + 1) * 0.38) + 0.34 * nz, 0, 1);
+      let k = 1; while (k < HEAT.length - 1 && heat > HEAT[k][0]) k++;
+      const a = HEAT[k - 1], b = HEAT[k], f = clamp((heat - a[0]) / (b[0] - a[0]), 0, 1);
+      d[o] = lerp(a[1], b[1], f); d[o + 1] = lerp(a[2], b[2], f); d[o + 2] = lerp(a[3], b[3], f); d[o + 3] = cov * 255;
+      continue;
+    }
     if (kind === 'bubble') {                        // thin soap film: clear centre, iridescent rim, two window reflections
       const fres = (1 - nz) ** 2, ph = 5.2 * nz + vnoise(nx * 2.2 + 9.3, ny * 2.2 + 4.1) * 5;
       let hl = boxMask(rx, ry, rz, 0.03) * 0.95;
@@ -265,7 +319,7 @@ function ballSprite(kind, hex) {
       G = ag * (lerp(0.11, 0.42, hemi) + kd * 0.97 + fd * 0.9) * occ * (1 - F) + E[1] * F;
       B = ab * (lerp(0.06, 0.46, hemi) + kd * 0.93 + fd) * occ * (1 - F) + E[2] * F;
     }
-    const o = (j * SPR + i) * 4; d[o] = enc(R); d[o + 1] = enc(G); d[o + 2] = enc(B); d[o + 3] = A * cov * 255;
+    d[o] = enc(R); d[o + 1] = enc(G); d[o + 2] = enc(B); d[o + 3] = A * cov * 255;
   }
   g.putImageData(img, 0, 0); return c;
 }
@@ -287,6 +341,13 @@ function cracked(src) {                            // the stone after its first 
   }
   g.restore(); return c;
 }
+// Half and quarter size copies, so far-away balls stay crisp and cost less to draw.
+function mips(c) {
+  const lv = [c];
+  for (let k = 0; k < 2; k++) { const p = lv[k], m = mk(p.width / 2, p.height / 2), g = m.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(p, 0, 0, m.width, m.height); lv.push(m); }
+  return lv;
+}
+const pick = (m, dpx) => dpx <= 46 ? m[2] : dpx <= 92 ? m[1] : m[0];
 
 const spr = {};
 const GLAZED = [
@@ -295,16 +356,23 @@ const GLAZED = [
   { key: 'green', hex: '#1f6e4c', shard: ['#2a7857', '#86c7a6'] },
   { key: 'ivory', hex: '#e4d9c0', shard: ['#d9cdb2', '#fbf5e6'] },
 ];
-const TEXW = 512, TEXH = 1024, TS = 2;
+const TEXW = 384, TEXH = 768, TS = 2;
 let texLane = null, texFrame = null;
-function makeSprites() {
-  for (const g of GLAZED) spr[g.key] = ballSprite('glazed', g.hex);
-  spr.stone = ballSprite('stone'); spr.stone2 = cracked(spr.stone);
-  spr.steel = ballSprite('steel'); spr.bubble = ballSprite('bubble');
+function makeBalls() {
+  for (const g of GLAZED) spr[g.key] = mips(ballSprite('glazed', g.hex));
+  const st = ballSprite('stone');
+  spr.stone = mips(st); spr.stone2 = mips(cracked(st));
+  spr.steel = mips(ballSprite('steel')); spr.bubble = mips(ballSprite('bubble')); spr.fire = mips(ballSprite('fire'));
   const soft = stops => { const c = mk(128, 128), g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); stops.forEach(s => gr.addColorStop(s[0], s[1])); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return c; };
   spr.shadow = soft([[0, 'rgba(6,3,1,0.85)'], [0.5, 'rgba(6,3,1,0.5)'], [0.8, 'rgba(6,3,1,0.14)'], [1, 'rgba(6,3,1,0)']]);
   spr.dust = soft([[0, 'rgba(236,220,196,0.7)'], [0.5, 'rgba(236,220,196,0.3)'], [1, 'rgba(236,220,196,0)']]);
-  // one grain map, tinted twice: oak for the lane, walnut for the frame
+  spr.smoke = soft([[0, 'rgba(26,20,16,0.6)'], [0.55, 'rgba(26,20,16,0.3)'], [1, 'rgba(26,20,16,0)']]);
+  spr.glow = soft([[0, 'rgba(255,190,90,0.95)'], [0.35, 'rgba(255,130,40,0.5)'], [0.7, 'rgba(230,80,20,0.14)'], [1, 'rgba(230,80,20,0)']]);
+  spr.fHot = soft([[0, 'rgba(255,246,200,0.95)'], [0.4, 'rgba(255,214,120,0.6)'], [1, 'rgba(255,190,80,0)']]);
+  spr.fMid = soft([[0, 'rgba(255,176,70,0.85)'], [0.5, 'rgba(250,120,30,0.45)'], [1, 'rgba(240,90,20,0)']]);
+  spr.fCool = soft([[0, 'rgba(214,74,22,0.7)'], [0.5, 'rgba(170,40,12,0.35)'], [1, 'rgba(120,24,8,0)']]);
+}
+function makeWood() {                              // one grain map, tinted twice: oak for the lane, walnut for the frame
   const tones = new Uint8Array(TEXW * TEXH);
   for (let j = 0; j < TEXH; j++) for (let i = 0; i < TEXW; i++) tones[j * TEXW + i] = woodTone(i / TS, j / TS, 3) * 255;
   const tint = st => {
@@ -320,9 +388,11 @@ function makeSprites() {
 /* ============ layout and the lane's perspective ============ */
 // The lane is a flat board (bx across, by along; by = 0 at the far end, BH at the brass line) seen from the
 // player's end. Straight lines on the board stay straight on screen, so an aim line is exactly where the shot goes.
-const S0 = 0.76, yFar = 64, RAILH = 62, MAXB = 3, BOUNCE = 0.9, ASSIST = 11;
+const S0 = 0.76, yFar = 64, RAILH = 70, MAXB = 3, BOUNCE = 0.9, ASSIST = 11, FIRE_AT = 15, BLAST = 112;
 let W = 0, H = 0, DPR = 1, U = 1, yNear = 0, yh = 0, K = 0, BW = 0, BH = 0, cxs = 0, SLY = 0, MAXPULL = 120, TRACKY = 0, XMIN = 0, XMAX = 0, byEnd = 0, RS = 8, fogH = 150;
-let bg = null, hdr = null, fork = null, fog = null;
+let bg = null, hdr = null, fork = null, thumb = null, fog = null;
+let maxDpr = 2.5;                                   // drawing resolution; lowered automatically on phones that can't keep up
+{ const q = +store.get('snapback.q'); if (q >= 1 && q <= 2.5) maxDpr = q; }
 const sling = { x: 0, tx: 0 }, pouch = { x: 0, y: 0, vx: 0, vy: 0 };
 const sOfY = y => (y - yh) / (yNear - yh);
 const byOfS = s => BH - BH * (1 / s - 1) / K;
@@ -333,10 +403,10 @@ const unproj = (x, y) => { const s = sOfY(y); return { x: BW / 2 + (x - cxs) / s
 function layout() {
   const r = cv.getBoundingClientRect();
   W = Math.max(260, r.width); H = Math.max(380, r.height);
-  DPR = Math.min(window.devicePixelRatio || 1, 2.6);
+  DPR = Math.min(window.devicePixelRatio || 1, maxDpr);
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   U = clamp(W / 400, 0.82, 1.25);
-  const below = clamp(H * 0.27, 176, 236);
+  const below = clamp(H * 0.27, 160, 236);
   SLY = H - below; MAXPULL = Math.min(150, below - 62); TRACKY = H - 28;
   yNear = SLY - 34 * U; K = 1 / S0 - 1; yh = (yFar - S0 * yNear) / (1 - S0);
   BH = (yNear - yFar) * (1 + K);
@@ -366,6 +436,7 @@ function planks(g, tex, x0, x1, y0, y1, pw, seed) {
 }
 
 function buildScene() {
+  drop(bg); drop(hdr);
   // 1. paint the whole table flat, in board units
   const WS = Math.min(DPR, 2), sTop = sOfY(0), sBot = sOfY(H);
   const by0 = byOfS(sTop) - 6, by1 = byOfS(sBot) + 6, bx0 = BW / 2 - W / 2 / sTop - 6, bx1 = BW - bx0, L = by1 - by0, RW = 16;
@@ -396,13 +467,14 @@ function buildScene() {
   g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(19, byT - 3.3, BW - 38, 0.7);
 
   // 2. lay it down in perspective, one screen row at a time
-  bg = mk(W * DPR, H * DPR); const b = bg.getContext('2d');
+  bg = mk(W * DPR, H * DPR); const b = bg.getContext('2d', { alpha: false });
   b.fillStyle = '#120a05'; b.fillRect(0, 0, bg.width, bg.height);
   for (let row = 0; row < bg.height; row++) {
     const s = sOfY((row + 0.5) / DPR), v = (byOfS(s) - by0) * WS;
     if (v < 0 || v > wc.height - 1) continue;
     b.drawImage(wc, 0, v, wc.width, 1, (cxs + (bx0 - BW / 2) * s) * DPR, row, (bx1 - bx0) * s * DPR, 1);
   }
+  drop(wc);
   // 3. light: a soft varnish sheen and a vignette
   b.setTransform(DPR, 0, 0, DPR, 0, 0);
   const my = lerp(yFar, yNear, 0.62);
@@ -411,11 +483,12 @@ function buildScene() {
   rg = b.createRadialGradient(W / 2, H * 0.58, H * 0.3, W / 2, H * 0.58, H * 0.82);
   rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(0,0,0,0.5)'); b.fillStyle = rg; b.fillRect(0, 0, W, H);
 
-  // header board: balls roll out from under it
+  // header board: balls roll out from under it. The grain is stretched a little so one piece spans any width.
   hdr = mk(W * DPR, (yFar + 22) * DPR); const hg = hdr.getContext('2d'); hg.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const kx = Math.max(1, W / (TEXH / TS - 2));
   hg.save(); hg.beginPath(); hg.rect(0, 0, W, yFar); hg.clip();
-  hg.translate(0, yFar); hg.rotate(-Math.PI / 2); hg.scale(1 / TS, 1 / TS);
-  hg.fillStyle = hg.createPattern(texFrame, 'repeat'); hg.fillRect(0, 0, yFar * TS, W * TS);
+  hg.translate(0, yFar); hg.rotate(-Math.PI / 2); hg.scale(1 / TS, kx / TS);
+  hg.fillStyle = hg.createPattern(texFrame, 'repeat'); hg.fillRect(0, 0, yFar * TS, W * TS / kx + 2);
   hg.restore();
   let vg = hg.createLinearGradient(0, 0, 0, yFar); vg.addColorStop(0, 'rgba(255,226,180,0.05)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
   hg.fillStyle = vg; hg.fillRect(0, 0, W, yFar);
@@ -429,6 +502,7 @@ function buildScene() {
 
 function buildFork() {
   // The fork is three tapered limbs. Each pixel finds the limb it sits on and is lit as a round, varnished piece of walnut.
+  if (fork) drop(fork.img);
   const sc = U * DPR, X0 = -54, Y0 = -28, X1 = 54, Y1 = 108, w = Math.ceil((X1 - X0) * sc), h = Math.ceil((Y1 - Y0) * sc), limbs = [];
   const limb = (pts, seed) => { const segs = []; let u = 0; for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]); segs.push({ ax: a[0], ay: a[1], dx: b[0] - a[0], dy: b[1] - a[1], len, ra: a[2], rb: b[2], u }); u += len; } limbs.push({ segs, seed, z: -1, nx: 0, ny: 0, nz: 1, u: 0, side: 0, r: 1 }); };
   const bez = (p0, p1, p2, p3, r0, r1, n) => { const o = []; for (let i = 0; i <= n; i++) { const t = i / n, m = 1 - t; o.push([m * m * m * p0[0] + 3 * m * m * t * p1[0] + 3 * m * t * t * p2[0] + t * t * t * p3[0], m * m * m * p0[1] + 3 * m * m * t * p1[1] + 3 * m * t * t * p2[1] + t * t * t * p3[1], lerp(r0, r1, t)]); } return o; };
@@ -485,28 +559,44 @@ function buildFork() {
   }
   const pad = Math.ceil(18 * DPR), out = mk(w + pad * 2, h + pad * 2), og = out.getContext('2d');
   og.shadowColor = 'rgba(8,4,1,0.6)'; og.shadowBlur = 9 * DPR; og.shadowOffsetX = 4 * DPR; og.shadowOffsetY = 6 * DPR;
-  og.drawImage(c, pad, pad);
+  og.drawImage(c, pad, pad); drop(c);
   fork = { img: out, ox: X0 * U - pad / DPR, oy: Y0 * U - pad / DPR, w: out.width / DPR, h: out.height / DPR };
+
+  // brass thumb for the track, with its shadow baked in so nothing is blurred per frame
+  if (thumb) drop(thumb.img);
+  const tw = 46, th = 15, tp = 10, tc = mk((tw + tp * 2) * DPR, (th + tp * 2) * DPR), tg = tc.getContext('2d');
+  tg.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const bgr = tg.createLinearGradient(0, tp, 0, tp + th); bgr.addColorStop(0, '#f1dfad'); bgr.addColorStop(0.45, '#cfa85d'); bgr.addColorStop(1, '#8c692c');
+  tg.shadowColor = 'rgba(0,0,0,0.55)'; tg.shadowBlur = 5 * DPR; tg.shadowOffsetY = 2 * DPR;
+  tg.fillStyle = bgr; rr(tg, tp, tp, tw, th, th / 2); tg.fill();
+  tg.shadowColor = 'transparent'; tg.shadowBlur = 0; tg.shadowOffsetY = 0;
+  tg.strokeStyle = 'rgba(48,30,8,0.6)'; tg.lineWidth = 1; tg.stroke();
+  for (const o of [-5, 0, 5]) {
+    const x = tp + tw / 2 + o;
+    tg.strokeStyle = 'rgba(70,46,12,0.6)'; tg.beginPath(); tg.moveTo(x, tp + 4); tg.lineTo(x, tp + th - 4); tg.stroke();
+    tg.strokeStyle = 'rgba(255,248,220,0.5)'; tg.beginPath(); tg.moveTo(x + 1, tp + 4); tg.lineTo(x + 1, tp + th - 4); tg.stroke();
+  }
+  thumb = { img: tc, w: tw + tp * 2, h: th + tp * 2 };
 }
+function rebuild() { layout(); buildScene(); buildFork(); for (const b of balls) b.x = clamp(b.x, b.R, BW - b.R); pausedDrawn = false; }
 
 /* ============ game state ============ */
-let state = 'menu', score = 0, level = 1, lives = 3, combo = 1, best = 0, elapsed = 0, time = 0;
-let balls = [], shots = [], shards = [], puffs = [], sparks = [], rings = [], texts = [];
-let spawnT = 0.6, bubT = 3, shake = 0, hurt = 0, reload = 0, notice = null, hintPull = true, hintMove = true;
+let state = 'menu', ready = false, score = 0, level = 1, lives = 3, combo = 1, best = +store.get('snapback.best') || 0, elapsed = 0, time = 0;
+let charge = 0, fireLoaded = false;                 // good shots toward the next fireball, and whether one is in the pouch
+let balls = [], shots = [], shards = [], puffs = [], sparks = [], rings = [], texts = [], flames = [], blasts = [], scorch = [];
+let spawnT = 0.6, bubT = 3, shake = 0, hurt = 0, reload = 0, notice = null, hintPull = true, hintMove = true, pausedDrawn = false;
 const aim = { on: false, id: null, sx: 0, sy: 0, px: 0, py: 0, len: 0, pred: null, launch: null };
 const move = { id: null, off: 0 };
 const keys = { l: false, r: false };
-try { best = +localStorage.getItem('snapback.best') || 0; } catch (e) {}
 
 /* ---------- sound: short synthesised knocks, no samples ---------- */
-let ac = null, out = null, nbuf = null, muted = false, lastTick = 0;
-try { muted = localStorage.getItem('snapback.muted') === '1'; } catch (e) {}
+let ac = null, out = null, nbuf = null, muted = store.get('snapback.muted') === '1', lastTick = 0;
 function audioInit() {
-  if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+  if (ac) { if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} } return; }
   try {
     ac = new (window.AudioContext || window.webkitAudioContext)();
     out = ac.createGain(); out.gain.value = 0.8; out.connect(ac.destination);
-    nbuf = ac.createBuffer(1, (ac.sampleRate * 0.4) | 0, ac.sampleRate);
+    nbuf = ac.createBuffer(1, (ac.sampleRate * 0.6) | 0, ac.sampleRate);
     const ch = nbuf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
   } catch (e) { ac = null; }
 }
@@ -522,7 +612,7 @@ function hiss(dur, vol, type, f, q, f2) {
   const t = ac.currentTime, s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
   s.buffer = nbuf; fl.type = type; fl.frequency.setValueAtTime(f, t); if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur); fl.Q.value = q || 0.7;
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-  s.connect(fl); fl.connect(g); g.connect(out); s.start(t, Math.random() * 0.15, dur + 0.02);
+  s.connect(fl); fl.connect(g); g.connect(out); s.start(t, Math.random() * 0.08, dur + 0.02);
 }
 const sfx = {
   release: p => { hiss(0.1, 0.16 + 0.2 * p, 'bandpass', 1100, 0.8, 320); ping(120, 0.12, 0.22, 'sine', 62); },
@@ -534,8 +624,15 @@ const sfx = {
   tick: () => { if (time - lastTick > 0.07) { lastTick = time; ping(1500, 0.03, 0.04); } },
   breach: () => { ping(96, 0.5, 0.4, 'sine', 46); hiss(0.2, 0.14, 'lowpass', 300); },
   level: () => { ping(660, 0.14, 0.06); setTimeout(() => ping(990, 0.2, 0.06), 120); },
+  ignite: () => { hiss(0.5, 0.2, 'bandpass', 500, 0.7, 2600); ping(330, 0.3, 0.1, 'triangle', 700); },
+  fire: () => { hiss(0.5, 0.34, 'bandpass', 1500, 0.6, 260); ping(150, 0.28, 0.26, 'sine', 64); },
+  boom: () => { ping(92, 0.7, 0.55, 'sine', 30); hiss(0.5, 0.5, 'lowpass', 900, 0.7, 110); hiss(0.22, 0.2, 'highpass', 3000); },
 };
 function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+// keep the screen awake while a game is running, where the phone allows it
+let wake = null;
+function wakeOn() { try { if (navigator.wakeLock && !wake) navigator.wakeLock.request('screen').then(w => { wake = w; w.addEventListener('release', () => { wake = null; }); }).catch(() => {}); } catch (e) {} }
+function wakeOff() { try { if (wake) wake.release(); } catch (e) {} wake = null; }
 
 /* ---------- spawning: it only ever gets busier ---------- */
 function spawnBall(d, force) {
@@ -581,8 +678,13 @@ function wallFx(s) {
   puffs.push({ x: p.x, y: p.y - RS * p.s * TILT, r0: 3, r1: 15 * p.s, t: 0, life: 0.25, a: 0.45 });
   if (state === 'play') { sfx.wall(); buzz(6); }
 }
-function say(x, y, str, col) { texts.push({ x: clamp(x, 44, W - 44), y: Math.max(y, yFar + 46), str, col, t: 0 }); }
+function say(x, y, str, col) { texts.push({ x: clamp(x, 56, W - 56), y: Math.max(y, yFar + 46), str, col, t: 0 }); }
 
+function goodShot() {                               // a shot that hit a real ball: one step closer to the fireball
+  if (state !== 'play' || fireLoaded) return;
+  if (++charge >= FIRE_AT) { charge = FIRE_AT; fireLoaded = true; notice = { str: 'Fireball ready', t: 0, col: '#ffc46b' }; sfx.ignite(); buzz(30); }
+  hud();
+}
 function strike(b, s) {
   const l = Math.hypot(s.vx, s.vy) || 1, dx = s.vx / l, dy = s.vy / l, live = state === 'play';
   b.hp--;
@@ -600,11 +702,33 @@ function strike(b, s) {
   }
   shatter(b, dx, dy);
 }
+function explode(s) {                               // the fireball goes off where it lands and takes every ball in reach with it
+  const live = state === 'play', RB = BLAST * U, c = scr(s);
+  let total = 0, n = 0;
+  for (const b of balls) {
+    if (b.dead || b.breached) continue;
+    const dx = b.x - s.x, dy = b.y - s.y, d = Math.hypot(dx, dy);
+    if (d > RB + b.R * 0.5) continue;
+    if (b.kind === 'bubble') { pop(b); continue; }
+    b.dead = true; n++;
+    if (live) { const pts = b.pts * combo * (s.banked ? 2 : 1); total += pts; score += pts; combo = Math.min(combo + 1, 9); }
+    shatter(b, d > 0.01 ? dx / d : 0, d > 0.01 ? dy / d : -1);
+  }
+  const rx = RB * c.s, ry = RB * c.s * c.s, cy = c.y - RS * c.s;
+  blasts.push({ x: c.x, y: cy, rx, ry, t: 0, life: 0.42 });
+  scorch.push({ bx: s.x, by: s.y, r: RB * 0.6, t: 0, life: 5 });
+  rings.push({ x: c.x, y: c.y, r0: rx * 0.2, r1: rx, t: 0, life: 0.32, col: '#ffdca6', lw: 2.2, sq: c.s });
+  for (let i = 0; i < (reduceMotion ? 8 : 26); i++) { const a = rnd(0, 6.2832), sp = rnd(60, 330) * c.s; flames.push({ x: c.x + Math.cos(a) * rx * 0.15, y: cy + Math.sin(a) * ry * 0.15, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.7 - 30, t: 0, life: rnd(0.3, 0.75), r: rnd(14, 30) * c.s * U }); }
+  for (let i = 0; i < (reduceMotion ? 6 : 20); i++) { const a = rnd(0, 6.2832), sp = rnd(200, 620) * c.s; sparks.push({ x: c.x, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.75, t: 0, life: rnd(0.2, 0.5), col: '#ffd27a' }); }
+  for (let i = 0; i < 6; i++) { const a = rnd(0, 6.2832); puffs.push({ x: c.x + Math.cos(a) * rx * 0.4, y: cy + Math.sin(a) * ry * 0.4, r0: rx * 0.25, r1: rx * rnd(0.6, 0.95), t: 0, life: rnd(0.8, 1.4), a: 0.5, img: spr.smoke, vy: -22 }); }
+  shake = Math.max(shake, 13);
+  if (live) { if (n) say(c.x, c.y - 44 * c.s, 'Fireball +' + total, '#ffc46b'); sfx.boom(); buzz(70); hud(); }
+}
 
 /* ---------- aiming: the guide is the real path, bounces included ---------- */
 const power = () => clamp((aim.len - 14) / (MAXPULL - 14), 0, 1);
 const shotSpeed = p => (520 + 1500 * p) * U;
-function predict(x, y, dx, dy, sp) {
+function predict(x, y, dx, dy, sp, rs) {
   const pts = [{ x, y }]; let t0 = 0, hit = null;
   for (let seg = 0; seg <= MAXB; seg++) {
     const tw = dx < -1e-6 ? (RS - x) / (dx * sp) : dx > 1e-6 ? (BW - RS - x) / (dx * sp) : Infinity;
@@ -613,7 +737,7 @@ function predict(x, y, dx, dy, sp) {
     let bt = tEnd, bb = null;
     for (const b of balls) {
       if (b.kind === 'bubble' || b.dead || b.breached) continue;
-      const cx = b.x + b.vx * t0 - x, cy = b.y + b.vy * t0 - y, rvx = dx * sp - b.vx, rvy = dy * sp - b.vy, rad = b.R + RS + ASSIST;
+      const cx = b.x + b.vx * t0 - x, cy = b.y + b.vy * t0 - y, rvx = dx * sp - b.vx, rvy = dy * sp - b.vy, rad = b.R + rs + ASSIST;
       const A = rvx * rvx + rvy * rvy, B = -2 * (cx * rvx + cy * rvy), C = cx * cx + cy * cy - rad * rad;
       if (C <= 0) { if (0 <= bt) { bt = 0; bb = b; } continue; }
       const D = B * B - 4 * A * C; if (D < 0) continue;
@@ -638,20 +762,23 @@ function retarget() {
   if (aim.len <= 14) return;
   const o = unproj(pouch.x, pouch.y), a = unproj(sling.x, SLY), dx = a.x - o.x, dy = a.y - o.y, l = Math.hypot(dx, dy);
   if (l < 0.01) return;
-  aim.launch = { x: o.x, y: o.y, dx: dx / l, dy: dy / l, sp: shotSpeed(power()) };
-  aim.pred = predict(o.x, o.y, dx / l, dy / l, aim.launch.sp);
+  const sp = fireLoaded ? Math.max(shotSpeed(power()), shotSpeed(0.45)) : shotSpeed(power()), rs = fireLoaded ? RS * 1.5 : RS;
+  aim.launch = { x: o.x, y: o.y, dx: dx / l, dy: dy / l, sp, rs };
+  aim.pred = predict(o.x, o.y, dx / l, dy / l, sp, rs);
 }
 function fire() {
   retarget(); const L = aim.launch; if (!L) return;
-  const pw = power(), h = aim.pred && aim.pred.hit;
-  shots.push({ x: L.x, y: L.y, vx: L.dx * L.sp, vy: L.dy * L.sp, sp: L.sp, bounces: 0, banked: false, target: h ? h.ball : null, assistFrom: h ? h.seg : 0, pierce: pw > 0.93 ? 1 : 0, heavy: pw > 0.93, seen: new Set(), scored: false, t: 0, tr: [] });
+  const pw = power(), h = aim.pred && aim.pred.hit, isFire = fireLoaded;
+  if (isFire) { fireLoaded = false; charge = 0; hud(); }
+  shots.push({ x: L.x, y: L.y, vx: L.dx * L.sp, vy: L.dy * L.sp, sp: L.sp, rs: L.rs, fire: isFire, bounces: 0, banked: false, target: h ? h.ball : null, assistFrom: h ? h.seg : 0, pierce: !isFire && pw > 0.93 ? 1 : 0, seen: new Set(), scored: false, t: 0, tr: [] });
   pouch.vx = (sling.x - pouch.x) * 14; pouch.vy = (SLY - pouch.y) * 14;
-  reload = 0.24; hintPull = false;
-  sfx.release(pw); buzz(pw > 0.93 ? 16 : 8);
+  reload = isFire ? 0.4 : 0.24; hintPull = false;
+  if (isFire) { sfx.fire(); buzz(26); } else { sfx.release(pw); buzz(pw > 0.93 ? 16 : 8); }
 }
 
+/* ---------- touch, mouse and keys ---------- */
 const pt = ev => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
-cv.addEventListener('pointerdown', ev => {
+function onDown(ev) {
   audioInit();
   if (state !== 'play') return;
   ev.preventDefault();
@@ -665,13 +792,14 @@ cv.addEventListener('pointerdown', ev => {
     if (aim.on || p.y < yFar) return;
     aim.on = true; aim.id = ev.pointerId; aim.sx = p.x; aim.sy = p.y; aim.px = aim.py = aim.len = 0; aim.pred = null;
   }
-  try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
-});
-cv.addEventListener('pointermove', ev => {
+  try { if (cv.setPointerCapture) cv.setPointerCapture(ev.pointerId); } catch (e) {}
+}
+function onMove(ev) {
   if (ev.pointerId === move.id) { sling.tx = clamp(pt(ev).x + move.off, XMIN, XMAX); if (Math.abs(sling.tx - sling.x) > 6) hintMove = false; }
   else if (aim.on && ev.pointerId === aim.id) { ev.preventDefault(); const p = pt(ev); setPull(p.x - aim.sx, p.y - aim.sy); }
-});
-function endPointer(ev, cancel) {
+}
+function onUp(ev, cancel) {
+  audioInit();                                      // iPhones only unlock sound on a finished touch
   if (ev.pointerId === move.id) move.id = null;
   else if (aim.on && ev.pointerId === aim.id) {
     aim.on = false;
@@ -679,8 +807,18 @@ function endPointer(ev, cancel) {
     aim.len = 0; aim.pred = null;
   }
 }
-cv.addEventListener('pointerup', ev => endPointer(ev, false));
-cv.addEventListener('pointercancel', ev => endPointer(ev, true));
+if (window.PointerEvent) {
+  cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove);
+  cv.addEventListener('pointerup', ev => onUp(ev, false)); cv.addEventListener('pointercancel', ev => onUp(ev, true));
+  cv.addEventListener('touchmove', ev => ev.preventDefault(), { passive: false });
+} else {                                            // older iPhones without pointer events: plain touches
+  const each = (type, fn) => cv.addEventListener(type, ev => {
+    ev.preventDefault();
+    for (let i = 0; i < ev.changedTouches.length; i++) { const t = ev.changedTouches[i]; fn({ pointerId: t.identifier, clientX: t.clientX, clientY: t.clientY, preventDefault() {} }); }
+  }, { passive: false });
+  each('touchstart', onDown); each('touchmove', onMove); each('touchend', ev => onUp(ev, false)); each('touchcancel', ev => onUp(ev, true));
+}
+document.addEventListener('gesturestart', ev => ev.preventDefault());      // no pinch-zoom mid game on iPhone
 cv.addEventListener('contextmenu', ev => ev.preventDefault());
 window.addEventListener('keydown', ev => {
   if (ev.key === 'ArrowLeft' || ev.key === 'a') { keys.l = true; hintMove = false; }
@@ -691,7 +829,6 @@ window.addEventListener('keyup', ev => { if (ev.key === 'ArrowLeft' || ev.key ==
 
 /* ============ update ============ */
 function update(dt) {
-  if (state === 'pause') return;
   time += dt;
   if (shake > 0) shake = Math.max(0, shake - dt * 40);
   if (hurt > 0) hurt = Math.max(0, hurt - dt * 1.8);
@@ -761,6 +898,8 @@ function update(dt) {
     }
 
     if (live && aim.on) retarget();
+    // the fireball waiting in the pouch burns quietly
+    if (live && fireLoaded && (reload <= 0 || aim.on) && Math.random() < dt * (reduceMotion ? 12 : 34)) flames.push({ x: pouch.x + rnd(-4, 4) * U, y: pouch.y + rnd(-5, 2) * U, vx: rnd(-10, 10), vy: rnd(-70, -34), t: 0, life: rnd(0.25, 0.5), r: rnd(7, 12) * U });
 
     for (const s of shots) {
       s.t += dt;
@@ -782,55 +921,65 @@ function update(dt) {
         }
         for (const b of balls) {
           if (b.dead || b.breached || s.seen.has(b)) continue;
-          const dx = b.x - s.x, dy = b.y - s.y, rad = b.R + RS;
+          const dx = b.x - s.x, dy = b.y - s.y, rad = b.R + s.rs;
           if (dx * dx + dy * dy > rad * rad) continue;
           s.seen.add(b);
           if (b.kind === 'bubble') { pop(b); continue; }
-          s.scored = true; strike(b, s);
+          if (s.fire) { s.scored = true; s.dead = true; explode(s); break; }
+          if (!s.scored) { s.scored = true; goodShot(); }
+          strike(b, s);
           if (b.dead && s.pierce > 0) { s.pierce--; s.target = null; } else { s.dead = true; break; }
         }
       }
       if (!s.dead && (s.y < -70 * U || s.y > byEnd + 60 || s.t > 5)) s.dead = true;
       if (s.dead && !s.scored && live && combo > 1) { combo = 1; hud(); }
-      const p = scr(s); s.tr.push(p.x, p.y - RS * p.s * TILT); if (s.tr.length > 12) s.tr.splice(0, 2);
+      const p = scr(s), n = s.tr.length;
+      if (s.fire && !s.dead && dt > 0) {            // a tail of flame streams off the fireball
+        const r = s.rs * p.s, vx = n >= 2 ? (p.x - s.tr[n - 2]) / dt : 0, vy = n >= 2 ? (p.y - r * TILT - s.tr[n - 1]) / dt : 0;
+        for (let i = 0; i < (reduceMotion ? 1 : 3); i++) flames.push({ x: p.x + rnd(-r, r) * 0.6, y: p.y - r * TILT + rnd(-r, r) * 0.6, vx: -vx * 0.1 + rnd(-24, 24), vy: -vy * 0.1 + rnd(-24, 24) - 20, t: 0, life: rnd(0.22, 0.46), r: r * rnd(1.1, 1.9) });
+      }
+      s.tr.push(p.x, p.y - s.rs * p.s * TILT); if (s.tr.length > 12) s.tr.splice(0, 2);
     }
     balls = balls.filter(b => !b.dead);
     shots = shots.filter(s => !s.dead);
   }
 
-  const fr = Math.exp(-4.5 * dt);
+  const fr = Math.exp(-4.5 * dt), fr2 = Math.exp(-3 * dt);
   for (const p of shards) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= fr; p.vy *= fr; p.rot += p.vr * dt; }
   shards = shards.filter(p => p.t < p.life);
   for (const p of sparks) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
   sparks = sparks.filter(p => p.t < p.life);
-  for (const p of puffs) p.t += dt; puffs = puffs.filter(p => p.t < p.life);
+  for (const p of puffs) { p.t += dt; if (p.vy) p.y += p.vy * dt; } puffs = puffs.filter(p => p.t < p.life);
   for (const p of rings) p.t += dt; rings = rings.filter(p => p.t < p.life);
   for (const p of texts) { p.t += dt; p.y -= 34 * dt; } texts = texts.filter(p => p.t < 0.9);
+  for (const p of flames) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= fr2; p.vy = p.vy * fr2 - 46 * dt; }
+  flames = flames.filter(p => p.t < p.life); if (flames.length > 220) flames.splice(0, flames.length - 220);
+  for (const p of blasts) p.t += dt; blasts = blasts.filter(p => p.t < p.life);
+  for (const p of scorch) p.t += dt; scorch = scorch.filter(p => p.t < p.life);
 }
 
 /* ============ draw ============ */
-const HS = SPR / (2 * SR);
 function drawBalls() {
   balls.sort((a, b) => (a.kind === 'bubble') - (b.kind === 'bubble') || a.y - b.y);
   for (const b of balls) {
-    const s = sAt(b.y), x = PX(b.x, s), y = PY(s), R = b.R * s, hs = R * HS;
+    const s = sAt(b.y), x = PX(b.x, s), y = PY(s), R = b.R * s, hs = R * HS, img = pick(b.img, hs * 2 * DPR);
     if (b.kind === 'bubble') {
       const fade = clamp((BH + 60 * U - b.y) / (70 * U), 0, 1), lift = (14 + Math.sin(b.t * 2.1 + b.ph) * 3) * s * U;
       ctx.globalAlpha = 0.2 * fade; ctx.drawImage(spr.shadow, x - R * 0.4, y - R * 0.3, R * 2, R * 1.3);
-      ctx.globalAlpha = fade; ctx.drawImage(b.img, x - hs, y - R * TILT - lift - hs, hs * 2, hs * 2);
+      ctx.globalAlpha = fade; ctx.drawImage(img, x - hs, y - R * TILT - lift - hs, hs * 2, hs * 2);
       continue;
     }
     const al = b.breached ? Math.max(0, b.fade) : 1, cy = y - R * TILT;
     ctx.globalAlpha = 0.6 * al; ctx.drawImage(spr.shadow, x - R * 0.93, y - R * 0.72, R * 2.5, R * 1.85);     // cast shadow, down-right of the light
     ctx.globalAlpha = 0.55 * al; ctx.drawImage(spr.shadow, x - R * 0.9, y - R * 0.5, R * 1.9, R * 1.1);       // contact shadow
-    ctx.globalAlpha = al; ctx.drawImage(b.img, x - hs, cy - hs, hs * 2, hs * 2);
-    if (b.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = b.flash / 0.12 * 0.45; ctx.drawImage(b.img, x - hs, cy - hs, hs * 2, hs * 2); ctx.globalCompositeOperation = 'source-over'; }
+    ctx.globalAlpha = al; ctx.drawImage(img, x - hs, cy - hs, hs * 2, hs * 2);
+    if (b.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = b.flash / 0.12 * 0.45; ctx.drawImage(img, x - hs, cy - hs, hs * 2, hs * 2); ctx.globalCompositeOperation = 'source-over'; }
   }
   ctx.globalAlpha = 1;
 }
 function drawGuide() {
-  const pr = aim.pred, pw = power(), step = 15 * U; let n = 0;
-  ctx.fillStyle = '#efe6d4';
+  const pr = aim.pred, pw = power(), step = 15 * U, col = fireLoaded ? '#ffcf8a' : '#efe6d4'; let n = 0;
+  ctx.fillStyle = col; ctx.strokeStyle = col;
   for (let i = 0; i < pr.pts.length - 1; i++) {
     const a = pr.pts[i], b = pr.pts[i + 1], len = Math.hypot(b.x - a.x, b.y - a.y);
     for (let dd = i === 0 ? aim.len + 18 * U : step * 0.6; dd < len; dd += step) {
@@ -839,31 +988,44 @@ function drawGuide() {
       ctx.beginPath(); ctx.arc(PX(a.x + (b.x - a.x) * t, s), PY(s), (1.4 + 0.8 * pw) * s * U, 0, 6.2832); ctx.fill(); n++;
     }
     if (i < pr.pts.length - 2) {                    // where it meets the rail
-      const s = sAt(b.y); ctx.globalAlpha = 0.8; ctx.strokeStyle = '#efe6d4'; ctx.lineWidth = 1.3;
+      const s = sAt(b.y); ctx.globalAlpha = 0.8; ctx.lineWidth = 1.3;
       ctx.beginPath(); ctx.arc(PX(b.x, s), PY(s), 4.5 * s * U, 0, 6.2832); ctx.stroke();
     }
+  }
+  if (fireLoaded && pr.hit) {                       // how far the fireball's blast will reach
+    const e = pr.pts[pr.pts.length - 1], s = sAt(e.y);
+    ctx.globalAlpha = 0.5; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(PX(e.x, s), PY(s), BLAST * U * s, BLAST * U * s * s, 0, 0, 6.2832); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
 function drawLock(b) {
   const s = sAt(b.y), R = b.R * s, x = PX(b.x, s), y = PY(s) - R * TILT, r = R + 5 * U;
-  ctx.strokeStyle = 'rgba(239,230,212,0.92)'; ctx.lineWidth = 1.5; ctx.lineCap = 'butt';
+  ctx.strokeStyle = fireLoaded ? 'rgba(255,207,138,0.95)' : 'rgba(239,230,212,0.92)'; ctx.lineWidth = 1.5; ctx.lineCap = 'butt';
   for (let i = 0; i < 4; i++) { const a0 = (reduceMotion ? 0 : time * 0.7) + i * 1.5708 + 0.25; ctx.beginPath(); ctx.arc(x, y, r, a0, a0 + 1.07); ctx.stroke(); }
+}
+function fireCore(x, y, r, lane) {                  // glowing core with its light; lane = also light the wood under it
+  ctx.globalCompositeOperation = 'lighter';
+  if (lane) { ctx.globalAlpha = 0.5; ctx.drawImage(spr.glow, x - r * 4.5, y + r * TILT - r * 2.6, r * 9, r * 5.2); }
+  ctx.globalAlpha = 0.72 + 0.2 * Math.sin(time * 37); ctx.drawImage(spr.glow, x - r * 2.7, y - r * 2.7, r * 5.4, r * 5.4);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  const hs = r * HS;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(time * 5); ctx.drawImage(pick(spr.fire, hs * 2 * DPR), -hs, -hs, hs * 2, hs * 2); ctx.restore();
 }
 function drawShots() {
   ctx.lineCap = 'round';
   for (const s of shots) {
-    const sc = sAt(s.y), x = PX(s.x, sc), y = PY(sc), r = RS * sc, hs = r * HS, n = s.tr.length / 2;
+    const sc = sAt(s.y), x = PX(s.x, sc), y = PY(sc), r = s.rs * sc, hs = r * HS, n = s.tr.length / 2;
+    if (s.fire) { fireCore(x, y - r * TILT, r, true); continue; }
     for (let i = 0; i < n - 1; i++) {
       ctx.strokeStyle = `rgba(255,246,226,${0.26 * (i + 1) / n})`; ctx.lineWidth = r * 1.5 * (i + 1) / n;
       ctx.beginPath(); ctx.moveTo(s.tr[i * 2], s.tr[i * 2 + 1]); ctx.lineTo(s.tr[i * 2 + 2], s.tr[i * 2 + 3]); ctx.stroke();
     }
     ctx.globalAlpha = 0.55; ctx.drawImage(spr.shadow, x - r * 0.8, y - r * 0.5, r * 2.2, r * 1.4);
-    ctx.globalAlpha = 1; ctx.drawImage(spr.steel, x - hs, y - r * TILT - hs, hs * 2, hs * 2);
+    ctx.globalAlpha = 1; ctx.drawImage(pick(spr.steel, hs * 2 * DPR), x - hs, y - r * TILT - hs, hs * 2, hs * 2);
   }
 }
 function drawFx() {
-  for (const p of puffs) { const k = p.t / p.life, r = lerp(p.r0, p.r1, k); ctx.globalAlpha = p.a * (1 - k); ctx.drawImage(spr.dust, p.x - r, p.y - r, r * 2, r * 2); }
+  for (const p of puffs) { const k = p.t / p.life, r = lerp(p.r0, p.r1, k); ctx.globalAlpha = p.a * (1 - k); ctx.drawImage(p.img || spr.dust, p.x - r, p.y - r, r * 2, r * 2); }
   for (const p of shards) {
     ctx.globalAlpha = 1 - (p.t / p.life) ** 2; ctx.fillStyle = p.col; ctx.beginPath();
     if (p.dot) ctx.arc(p.x, p.y, p.sz, 0, 6.2832);
@@ -871,51 +1033,56 @@ function drawFx() {
     ctx.fill();
   }
   ctx.lineCap = 'round'; ctx.lineWidth = 1.4;
-  for (const p of sparks) { ctx.globalAlpha = 1 - p.t / p.life; ctx.strokeStyle = '#fff0cc'; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.028, p.y - p.vy * 0.028); ctx.stroke(); }
-  for (const p of rings) { const k = p.t / p.life; ctx.globalAlpha = 0.7 * (1 - k); ctx.strokeStyle = '#eef4ff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(p.x, p.y, lerp(p.r0, p.r1, k), 0, 6.2832); ctx.stroke(); }
+  for (const p of sparks) { ctx.globalAlpha = 1 - p.t / p.life; ctx.strokeStyle = p.col || '#fff0cc'; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.028, p.y - p.vy * 0.028); ctx.stroke(); }
+  for (const p of rings) { const k = p.t / p.life, r = lerp(p.r0, p.r1, k); ctx.globalAlpha = 0.7 * (1 - k); ctx.strokeStyle = p.col || '#eef4ff'; ctx.lineWidth = p.lw || 1.2; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * (p.sq || 1), 0, 0, 6.2832); ctx.stroke(); }
   ctx.globalAlpha = 1;
+}
+function drawFire() {                               // everything that gives off light is added on top
+  if (!flames.length && !blasts.length) return;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of blasts) {
+    const k = p.t / p.life, e = 1 - (1 - k) * (1 - k), sz = lerp(0.45, 1.2, e), rx = p.rx * sz, ry = lerp(p.ry, p.rx, 0.45) * sz;
+    ctx.globalAlpha = (1 - k) ** 1.4; ctx.drawImage(spr.glow, p.x - rx, p.y - ry, rx * 2, ry * 2);
+    ctx.globalAlpha = (1 - k) ** 2.2; ctx.drawImage(spr.fHot, p.x - rx * 0.55, p.y - ry * 0.55, rx * 1.1, ry * 1.1);
+  }
+  for (const p of flames) {
+    if (p.y < yFar) continue;
+    const k = p.t / p.life, r = p.r * (1 - 0.55 * k);
+    ctx.globalAlpha = (1 - k) * 0.85; ctx.drawImage(k < 0.35 ? spr.fHot : k < 0.7 ? spr.fMid : spr.fCool, p.x - r, p.y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 }
 function band(x0, y0, x1, y1) {                    // latex thins and pales as it stretches
   const len = Math.hypot(x1 - x0, y1 - y0), ratio = Math.max(1, len / (24 * U)), w = Math.max(1.7, 4.8 * U / Math.sqrt(ratio)), t = clamp((ratio - 1) / 5, 0, 1);
   const line = (dx, dy) => { ctx.beginPath(); ctx.moveTo(x0 + dx, y0 + dy); ctx.lineTo(x1 + dx, y1 + dy); ctx.stroke(); };
-  ctx.shadowColor = 'rgba(8,4,1,0.45)'; ctx.shadowBlur = 5 * DPR; ctx.shadowOffsetX = 2 * DPR; ctx.shadowOffsetY = 3 * DPR;
+  ctx.strokeStyle = 'rgba(8,4,1,0.26)'; ctx.lineWidth = w + 2.4; line(2.4, 3.4);                // its shadow on the lane
   ctx.strokeStyle = '#4a3512'; ctx.lineWidth = w + 1.4; line(0, 0);
-  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = ctx.shadowOffsetY = 0;
   ctx.strokeStyle = `rgb(${lerp(184, 228, t) | 0},${lerp(138, 198, t) | 0},${lerp(56, 128, t) | 0})`; ctx.lineWidth = w; line(0, 0);
   ctx.strokeStyle = 'rgba(255,242,206,0.38)'; ctx.lineWidth = w * 0.3; line(-w * 0.16, -w * 0.16);
 }
 function drawSling() {
-  const sx = sling.x;
+  const sx = sling.x, loaded = reload <= 0 || aim.on;
+  ctx.drawImage(thumb.img, sx - thumb.w / 2, TRACKY - thumb.h / 2, thumb.w, thumb.h);
   ctx.drawImage(fork.img, sx + fork.ox, SLY + fork.oy, fork.w, fork.h);
   const dx = pouch.x - sx, dy = pouch.y - SLY, th = Math.hypot(dx, dy) > 3 ? Math.atan2(dy, dx) : Math.PI / 2;
   const rp = 11.5 * U, a1 = th - 1.75, a2 = th + 1.75;
   ctx.lineCap = 'round';
   band(sx + 36 * U, SLY - 7 * U, pouch.x + Math.cos(a1) * rp, pouch.y + Math.sin(a1) * rp);
   band(sx - 36 * U, SLY - 7 * U, pouch.x + Math.cos(a2) * rp, pouch.y + Math.sin(a2) * rp);
-  const arc = (r, lw, col) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(pouch.x, pouch.y, r, a1, a2); ctx.stroke(); };
-  ctx.shadowColor = 'rgba(8,4,1,0.45)'; ctx.shadowBlur = 5 * DPR; ctx.shadowOffsetX = 2 * DPR; ctx.shadowOffsetY = 3 * DPR;
+  const arc = (r, lw, col, ox, oy) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(pouch.x + (ox || 0), pouch.y + (oy || 0), r, a1, a2); ctx.stroke(); };
+  arc(rp, 9.6 * U, 'rgba(8,4,1,0.26)', 2.4, 3.4);
   arc(rp, 8.4 * U, '#2b180c');                      // leather pouch folded round the shot
-  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = ctx.shadowOffsetY = 0;
   arc(rp, 6.8 * U, '#8a5a33'); arc(rp + 1.5 * U, 1.5 * U, 'rgba(58,32,14,0.55)'); arc(rp - 1.7 * U, 1.4 * U, 'rgba(228,178,122,0.5)');
-  if (reload <= 0 || aim.on) { const r = 8.4 * U, hs = r * HS; ctx.drawImage(spr.steel, pouch.x - hs, pouch.y - hs, hs * 2, hs * 2); }
+  if (loaded) {
+    if (fireLoaded) fireCore(pouch.x, pouch.y, 9.6 * U, false);
+    else { const hs = 8.4 * U * HS; ctx.drawImage(pick(spr.steel, hs * 2 * DPR), pouch.x - hs, pouch.y - hs, hs * 2, hs * 2); }
+  }
   if (aim.on && aim.len > 14) {                     // pull gauge; the notch marks a shot that goes through
     const pw = power(), bw = 58 * U, x0 = sx - bw / 2, y0 = SLY - 23 * U;
     ctx.fillStyle = 'rgba(14,8,4,0.55)'; ctx.fillRect(x0 - 1, y0 - 1, bw + 2, 5);
     ctx.fillStyle = 'rgba(239,230,212,0.22)'; ctx.fillRect(x0, y0, bw, 3);
-    ctx.fillStyle = pw > 0.93 ? '#fff6e2' : '#d2ae6a'; ctx.fillRect(x0, y0, bw * pw, 3);
-    ctx.fillStyle = '#efe6d4'; ctx.fillRect(x0 + bw * 0.93, y0 - 2, 1, 7);
-  }
-  // brass thumb on the track
-  const w = 46, h = 15, y = TRACKY, g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
-  g.addColorStop(0, '#f1dfad'); g.addColorStop(0.45, '#cfa85d'); g.addColorStop(1, '#8c692c');
-  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 5 * DPR; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 2 * DPR;
-  ctx.fillStyle = g; rr(ctx, sx - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
-  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-  ctx.strokeStyle = 'rgba(48,30,8,0.6)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.lineCap = 'butt';
-  for (const o of [-5, 0, 5]) {
-    ctx.strokeStyle = 'rgba(70,46,12,0.6)'; ctx.beginPath(); ctx.moveTo(sx + o, y - 3.5); ctx.lineTo(sx + o, y + 3.5); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,248,220,0.5)'; ctx.beginPath(); ctx.moveTo(sx + o + 1, y - 3.5); ctx.lineTo(sx + o + 1, y + 3.5); ctx.stroke();
+    ctx.fillStyle = fireLoaded ? '#f2a444' : pw > 0.93 ? '#fff6e2' : '#d2ae6a'; ctx.fillRect(x0, y0, bw * pw, 3);
+    if (!fireLoaded) { ctx.fillStyle = '#efe6d4'; ctx.fillRect(x0 + bw * 0.93, y0 - 2, 1, 7); }
   }
 }
 function label(str, x, y, px, col, alpha, weight) {
@@ -926,7 +1093,7 @@ function label(str, x, y, px, col, alpha, weight) {
 function drawTexts() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const p of texts) label(p.str, p.x, p.y, 16 * U, p.col, clamp((0.9 - p.t) / 0.35, 0, 1));
-  if (notice && state === 'play') label(notice.str.toUpperCase(), W / 2, lerp(yFar, yNear, 0.3), 19 * U, '#efe6d4', clamp(Math.min(notice.t / 0.25, (1.8 - notice.t) / 0.4), 0, 1));
+  if (notice && state === 'play') label(notice.str.toUpperCase(), W / 2, lerp(yFar, yNear, 0.3), 19 * U, notice.col || '#efe6d4', clamp(Math.min(notice.t / 0.25, (1.8 - notice.t) / 0.4), 0, 1));
   if (state === 'play') {
     if (hintPull && !aim.on) label('Pull back and release', W / 2, yNear - 22 * U, 14 * U, '#efe6d4', 0.8, 500);
     if (hintMove) label('Slide here to move', W / 2, TRACKY - 22, 13 * U, '#efe6d4', 0.7, 500);
@@ -940,6 +1107,11 @@ function draw() {
   ctx.save();
   if (shake > 0 && !reduceMotion) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   ctx.drawImage(bg, 0, 0, W, H);
+  for (const m of scorch) {                         // burn marks fade off the wood
+    const s = sAt(m.by), k = m.t / m.life, rx = m.r * s, ry = m.r * s * s;
+    ctx.globalAlpha = 0.6 * (k < 0.55 ? 1 : (1 - k) / 0.45); ctx.drawImage(spr.shadow, PX(m.bx, s) - rx, PY(s) - ry, rx * 2, ry * 2);
+  }
+  ctx.globalAlpha = 1;
   if (aim.on && aim.pred) drawGuide();
   drawBalls();
   if (aim.on && aim.pred && aim.pred.hit && !aim.pred.hit.ball.dead) drawLock(aim.pred.hit.ball);
@@ -948,6 +1120,7 @@ function draw() {
   ctx.fillStyle = fog; ctx.fillRect(0, yFar, W, fogH);
   ctx.drawImage(hdr, 0, 0, W, hdr.height / DPR);
   drawSling();
+  drawFire();
   drawTexts();
   ctx.restore();
   if (hurt > 0) {
@@ -960,60 +1133,101 @@ function draw() {
 function hud() {
   $('score').textContent = score; $('level').textContent = level;
   $('combo').hidden = combo < 2; $('combo').textContent = '×' + combo;
-  [...$('lives').children].forEach((el, i) => el.classList.toggle('gone', i >= lives));
+  const kids = $('lives').children; for (let i = 0; i < kids.length; i++) kids[i].classList.toggle('gone', i >= lives);
   $('lives').setAttribute('aria-label', lives + (lives === 1 ? ' life left' : ' lives left'));
+  $('fireFill').style.width = (charge / FIRE_AT * 100) + '%';
+  $('fireMeter').setAttribute('aria-valuenow', charge);
+  $('fireStat').classList.toggle('ready', fireLoaded);
+  $('fireLabel').textContent = fireLoaded ? 'Ready' : 'Fire';
 }
 function show(card) {
   $('overlay').hidden = !card;
   for (const id of ['menuCard', 'pauseCard', 'overCard']) $(id).hidden = id !== card;
 }
 function newGame() {
+  if (!ready) return;
   audioInit();
-  score = 0; lives = 3; combo = 1; level = 1; elapsed = 0; spawnT = 0.5; bubT = 6; shake = hurt = 0; notice = null;
-  balls = []; shots = []; shards = []; puffs = []; sparks = []; rings = []; texts = [];
-  aim.on = false; move.id = null;
-  state = 'play'; show(null); hud();
+  score = 0; lives = 3; combo = 1; level = 1; elapsed = 0; spawnT = 0.5; bubT = 6; shake = hurt = 0; notice = null; charge = 0; fireLoaded = false;
+  balls = []; shots = []; shards = []; puffs = []; sparks = []; rings = []; texts = []; flames = []; blasts = []; scorch = [];
+  aim.on = false; move.id = null; perf.t = perf.n = 0; perf.skip = 90;
+  state = 'play'; show(null); hud(); wakeOn();
 }
 function gameOver() {
-  state = 'over'; aim.on = false; move.id = null;
+  state = 'over'; aim.on = false; move.id = null; wakeOff();
   const isBest = score > best;
-  if (isBest) { best = score; try { localStorage.setItem('snapback.best', String(best)); } catch (e) {} }
+  if (isBest) { best = score; store.set('snapback.best', best); }
   $('finalScore').textContent = score; $('finalLevel').textContent = level; $('finalBest').textContent = best;
-  $('overNote').textContent = isBest && score > 0 ? 'A new best.' : 'Three balls crossed the line. Stone needs two hits, so start on it early.';
+  $('overNote').textContent = isBest && score > 0 ? 'A new best.' : 'Three balls crossed the line. Save the fireball for a crowd.';
   show('overCard');
 }
-function pause() { if (state === 'play') { state = 'pause'; aim.on = false; move.id = null; show('pauseCard'); } }
-function resume() { if (state === 'pause') { state = 'play'; show(null); } }
-function soundLabel() { $('soundBtn').classList.toggle('muted', muted); $('soundBtn').setAttribute('aria-pressed', String(!muted)); }
+function pause() { if (state === 'play') { state = 'pause'; aim.on = false; move.id = null; keys.l = keys.r = false; show('pauseCard'); wakeOff(); } }
+function resume() { if (state === 'pause') { state = 'play'; show(null); perf.t = perf.n = 0; perf.skip = 60; wakeOn(); } }
+function soundLabel() { document.querySelectorAll('.sound-toggle').forEach(b => { b.textContent = muted ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(!muted)); }); }
 
 $('playBtn').addEventListener('click', newGame);
 $('againBtn').addEventListener('click', newGame);
 $('resumeBtn').addEventListener('click', resume);
 $('pauseBtn').addEventListener('click', () => state === 'pause' ? resume() : pause());
-$('soundBtn').addEventListener('click', () => {
-  muted = !muted; audioInit(); soundLabel();
-  try { localStorage.setItem('snapback.muted', muted ? '1' : '0'); } catch (e) {}
-});
+document.querySelectorAll('.sound-toggle').forEach(b => b.addEventListener('click', () => {
+  muted = !muted; audioInit(); soundLabel(); store.set('snapback.muted', muted ? '1' : '0');
+  if (!muted) ping(660, 0.1, 0.07);
+}));
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+window.addEventListener('pagehide', pause);
+window.addEventListener('blur', pause);
+const mqL = matchMedia('(orientation: landscape) and (max-height: 430px)');
+const onL = () => { if (mqL.matches) pause(); };
+if (mqL.addEventListener) mqL.addEventListener('change', onL); else if (mqL.addListener) mqL.addListener(onL);
 let rzT = 0;
-window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { const r = cv.getBoundingClientRect(); if (Math.abs(r.width - W) < 1 && Math.abs(r.height - H) < 1) return; layout(); buildScene(); buildFork(); for (const b of balls) b.x = clamp(b.x, b.R, BW - b.R); }, 140); });
+window.addEventListener('resize', () => {
+  clearTimeout(rzT);
+  rzT = setTimeout(() => {
+    if (!ready || mqL.matches) return;
+    const r = cv.getBoundingClientRect();
+    if (Math.abs(r.width - W) < 1 && Math.abs(r.height - H) < 1) return;
+    rebuild();
+  }, 140);
+});
+
+// If the phone can't hold a smooth frame rate, draw at a lower resolution. If that doesn't help
+// (a battery saver capping the rate, say), go back to the sharper picture and stop trying.
+const perf = { t: 0, n: 0, skip: 90, prevAvg: 0, prevDpr: 0, locked: false };
+function watchPerf(raw) {
+  if (perf.locked || state !== 'play' || raw <= 0 || raw > 0.2) return;
+  if (perf.skip > 0) { perf.skip--; return; }
+  perf.t += raw; perf.n++;
+  if (perf.n < 80) return;
+  const avg = perf.t / perf.n; perf.t = perf.n = 0;
+  if (perf.prevDpr) {
+    if (avg > perf.prevAvg * 0.88) { maxDpr = perf.prevDpr; perf.prevDpr = 0; perf.locked = true; rebuild(); return; }
+    store.set('snapback.q', maxDpr); perf.prevDpr = 0;
+  }
+  if (avg > 0.0235 && DPR > 1.3) { perf.prevAvg = avg; perf.prevDpr = DPR; maxDpr = Math.max(1.25, DPR - 0.5); perf.skip = 40; rebuild(); }
+}
 
 let last = 0;
 function frame(t) {
-  const dt = Math.min(0.034, (t - last) / 1000 || 0); last = t;
-  update(dt); draw();
+  const raw = (t - last) / 1000 || 0; last = t;
+  if (state === 'pause') { if (!pausedDrawn) { draw(); pausedDrawn = true; } }      // nothing moves while paused, so nothing is redrawn
+  else { pausedDrawn = false; update(Math.min(0.034, raw)); draw(); watchPerf(raw); }
   requestAnimationFrame(frame);
 }
-function init() {
-  makeSprites(); layout(); buildScene(); buildFork();
-  document.querySelectorAll('.legend canvas').forEach(c => c.getContext('2d').drawImage(spr[c.dataset.ball], 0, 0, c.width, c.height));
+async function init() {                             // built in steps so the page stays responsive while the wood is made
+  const nap = () => new Promise(r => setTimeout(r, 0));
+  layout(); ctx.fillStyle = '#25170d'; ctx.fillRect(0, 0, cv.width, cv.height);
+  await nap(); makeBalls();
+  document.querySelectorAll('.legend canvas').forEach(c => c.getContext('2d').drawImage(spr[c.dataset.ball][0], 0, 0, c.width, c.height));
+  await nap(); makeWood();
+  await nap(); buildScene();
+  await nap(); buildFork();
   // a few balls already on the lane behind the menu
   for (let i = 0; i < 6; i++) { spawnBall(0.3, i === 2 ? 'stone' : 'glazed'); balls[balls.length - 1].y = BH * (0.08 + i * 0.14); }
   for (const f of [0.3, 0.62]) { spawnBubble(0.3); balls[balls.length - 1].y = BH * f; }
   hud(); soundLabel();
   $('menuBest').textContent = best ? 'Best score ' + best : '';
+  ready = true; $('playBtn').disabled = false; $('playBtn').textContent = 'Play';
   requestAnimationFrame(frame);
 }
-setTimeout(init, 30);
+init();
 })();
 </script>
