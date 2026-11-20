@@ -171,6 +171,8 @@ button { touch-action: manipulation; }
 .board img, .board i { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--hair-soft); }
 .board .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ivory); }
 .board b { font: 600 18px/1 var(--display); color: var(--ivory); font-variant-numeric: tabular-nums; }
+.board.short { max-height: none; padding-top: 4px; border-top: 1px solid var(--hair-soft); }
+.board.short:empty { display: none; }
 .card .board-note { font-size: 13.5px; text-align: center; color: var(--ivory-dim); }
 .final { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .final .stat b { height: 30px; font-size: 30px; }
@@ -260,8 +262,10 @@ button { touch-action: manipulation; }
         <div class="stat"><small>Best</small><b id="finalBest">0</b></div>
       </div>
       <p id="overNote"></p>
+      <ol class="board short" id="overBoard"></ol>
+      <p class="board-note" id="overBoardNote" role="status" hidden></p>
       <button class="btn" id="againBtn" type="button">Play again</button>
-      <button class="ghost board-btn" type="button">Leaderboard</button>
+      <button class="ghost board-btn" type="button">Full leaderboard</button>
     </div>
 
     <div class="card" id="boardCard" hidden>

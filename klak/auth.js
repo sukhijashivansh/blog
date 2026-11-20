@@ -38,20 +38,22 @@ onAuthStateChanged(auth, user => {
   syncPlayer(user).catch(e => console.warn('Klak: could not save player', e));
 });
 
+// Save a new best first, so the board shown on the game-over card already includes it.
 window.addEventListener('klak:score', async e => {
   const { score, level } = e.detail;
-  if (!me || score <= myBest) return;
-  const prev = myBest; myBest = score;
-  try { await updateDoc(doc(db, 'players', me.uid), { best: score, level, lastSeen: serverTimestamp() }); }
-  catch (e) { myBest = prev; console.warn('Klak: could not save score', e); }
+  if (me && score > myBest) {
+    const prev = myBest; myBest = score;
+    try { await withTimeout(updateDoc(doc(db, 'players', me.uid), { best: score, level, lastSeen: serverTimestamp() })); }
+    catch (e) { myBest = prev; console.warn('Klak: could not save score', e); }
+  }
+  showBoard($('overBoard'), $('overBoardNote'), 5);
 });
 
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
-window.addEventListener('klak:board', async () => {
-  const list = $('boardList'), note = $('boardNote');
+async function showBoard(list, note, n) {
   list.innerHTML = ''; note.textContent = 'Loading…'; note.hidden = false;
   try {
-    const snap = await withTimeout(getDocs(query(collection(db, 'players'), where('best', '>', 0), orderBy('best', 'desc'), limit(25))));
+    const snap = await withTimeout(getDocs(query(collection(db, 'players'), where('best', '>', 0), orderBy('best', 'desc'), limit(n))));
     list.innerHTML = snap.docs.map((d, i) => {
       const p = d.data();
       return `<li${me && d.id === me.uid ? ' class="me"' : ''}><span class="rank">${i + 1}</span>`
@@ -64,7 +66,8 @@ window.addEventListener('klak:board', async () => {
     console.warn('Klak: could not load leaderboard', e);
     note.textContent = navigator.onLine ? 'The leaderboard is not available right now.' : 'You are offline.';
   }
-});
+}
+window.addEventListener('klak:board', () => showBoard($('boardList'), $('boardNote'), 25));
 
 signInBtn.addEventListener('click', async () => {
   showError('');
