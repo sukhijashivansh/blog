@@ -163,6 +163,15 @@ button { touch-action: manipulation; }
 .card .install-tip { font-size: 13.5px; line-height: 1.45; text-align: center; color: var(--ivory-soft); }
 .install-tip svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--brass); }
 .install-tip b { font-weight: 500; color: var(--ivory); }
+.board { list-style: none; margin: 0; padding: 0; display: grid; max-height: 52vh; overflow-y: auto; }
+.board li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 4px; border-bottom: 1px solid var(--hair-soft); }
+.board li:last-child { border-bottom: 0; }
+.board li.me { background: var(--hair-soft); border-radius: 8px; }
+.board .rank { width: 22px; flex: none; text-align: right; font: 600 15px/1 var(--display); color: var(--brass); font-variant-numeric: tabular-nums; }
+.board img, .board i { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--hair-soft); }
+.board .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ivory); }
+.board b { font: 600 18px/1 var(--display); color: var(--ivory); font-variant-numeric: tabular-nums; }
+.card .board-note { font-size: 13.5px; text-align: center; color: var(--ivory-dim); }
 .final { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .final .stat b { height: 30px; font-size: 30px; }
 @media (max-height: 680px) {
@@ -216,6 +225,7 @@ button { touch-action: manipulation; }
       </ul>
       <button class="btn" id="playBtn" type="button" disabled>Preparing the lane</button>
       <button class="ghost sound-toggle" id="menuSound" type="button">Sound on</button>
+      <button class="ghost board-btn" type="button">Leaderboard</button>
       <div class="best" id="menuBest"></div>
       <div class="account">
         <button class="ghost google" id="signInBtn" type="button" hidden>
@@ -251,6 +261,14 @@ button { touch-action: manipulation; }
       </div>
       <p id="overNote"></p>
       <button class="btn" id="againBtn" type="button">Play again</button>
+      <button class="ghost board-btn" type="button">Leaderboard</button>
+    </div>
+
+    <div class="card" id="boardCard" hidden>
+      <h1>Leaderboard</h1>
+      <ol class="board" id="boardList"></ol>
+      <p class="board-note" id="boardNote" role="status" hidden></p>
+      <button class="btn" id="boardBack" type="button">Back</button>
     </div>
   </div>
 
@@ -1189,7 +1207,7 @@ function hud() {
 }
 function show(card) {
   $('overlay').hidden = !card;
-  for (const id of ['menuCard', 'pauseCard', 'overCard']) $(id).hidden = id !== card;
+  for (const id of ['menuCard', 'pauseCard', 'overCard', 'boardCard']) $(id).hidden = id !== card;
 }
 function newGame() {
   if (!ready) return;
@@ -1206,6 +1224,7 @@ function gameOver() {
   $('finalScore').textContent = score; $('finalLevel').textContent = level; $('finalBest').textContent = best;
   $('overNote').textContent = isBest && score > 0 ? 'A new best.' : 'Three balls crossed the line. Save the fireball for a crowd.';
   show('overCard');
+  window.dispatchEvent(new CustomEvent('klak:score', { detail: { score, level } }));
 }
 function pause() { if (state === 'play') { state = 'pause'; aim.on = false; move.id = null; keys.l = keys.r = false; show('pauseCard'); wakeOff(); } }
 function resume() { if (state === 'pause') { state = 'play'; show(null); perf.t = perf.n = 0; perf.skip = 60; wakeOn(); } }
@@ -1214,6 +1233,12 @@ function soundLabel() { document.querySelectorAll('.sound-toggle').forEach(b => 
 $('playBtn').addEventListener('click', newGame);
 $('againBtn').addEventListener('click', newGame);
 $('resumeBtn').addEventListener('click', resume);
+let boardFrom = 'menuCard';
+document.querySelectorAll('.board-btn').forEach(b => b.addEventListener('click', () => {
+  boardFrom = state === 'over' ? 'overCard' : 'menuCard';
+  show('boardCard'); window.dispatchEvent(new Event('klak:board'));
+}));
+$('boardBack').addEventListener('click', () => show(boardFrom));
 $('pauseBtn').addEventListener('click', () => state === 'pause' ? resume() : pause());
 document.querySelectorAll('.sound-toggle').forEach(b => b.addEventListener('click', () => {
   muted = !muted; audioInit(); soundLabel(); store.set('snapback.muted', muted ? '1' : '0');

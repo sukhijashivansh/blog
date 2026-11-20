@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Must match ADMIN_EMAIL in firebase.js.
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'sukhija.shivansh@gmail.com' && request.auth.token.email_verified;
+    }
+    function validPlayer(d) {
+      return d.keys().hasOnly(['name', 'photo', 'best', 'level', 'joinedAt', 'lastSeen'])
+        && d.name is string && d.name.size() <= 80 && d.photo is string && d.photo.size() <= 500
+        && d.best is int && d.best >= 0 && d.best < 10000000 && d.level is int && d.level >= 0 && d.level < 1000;
+    }
+
+    // Leaderboard rows: anyone can read, each player writes only their own, and a best never goes down.
+    match /players/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid && validPlayer(request.resource.data)
+        && request.resource.data.joinedAt == request.time;
+      allow update: if request.auth != null && request.auth.uid == uid && validPlayer(request.resource.data)
+        && request.resource.data.best >= resource.data.best && request.resource.data.joinedAt == resource.data.joinedAt;
+    }
+
+    // Emails stay private: only the admin page reads them.
+    match /emails/{uid} {
+      allow read: if isAdmin();
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email']) && request.resource.data.email == request.auth.token.email;
+    }
+  }
+}

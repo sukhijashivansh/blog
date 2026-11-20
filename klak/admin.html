@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<title>Klak Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --walnut-deep: #150d07;
+  --panel: rgba(24, 15, 9, 0.95);
+  --ivory: #efe6d4;
+  --ivory-soft: #d8cbb4;
+  --ivory-dim: #a99a80;
+  --brass: #d2ae6a;
+  --ember: #f2a444;
+  --hair: rgba(210, 174, 106, 0.34);
+  --hair-soft: rgba(210, 174, 106, 0.16);
+  --display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--walnut-deep); color: var(--ivory); font: 400 15px/1.5 var(--body); }
+main { max-width: 960px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 20px; }
+header { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
+h1 { flex: 1; margin: 0; font: 600 22px/1.2 var(--display); letter-spacing: 0.26em; text-transform: uppercase; }
+button {
+  min-height: 40px; padding: 0 16px; border: 1px solid var(--hair); border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--ivory); font: 500 12px/1 var(--display); letter-spacing: 0.16em; text-transform: uppercase;
+}
+button:hover { background: var(--hair-soft); }
+.msg { color: var(--ivory-soft); }
+.msg.err { color: var(--ember); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { padding: 16px; background: var(--panel); border: 1px solid var(--hair-soft); border-radius: 12px; }
+.tile small { display: block; font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
+.tile b { display: block; margin-top: 8px; font: 600 34px/1 var(--display); font-variant-numeric: tabular-nums; }
+.wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--hair-soft); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--hair-soft); }
+th { font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+td img { width: 24px; height: 24px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+td .dim { color: var(--ivory-dim); }
+</style>
+<main>
+  <header>
+    <h1>Klak admin</h1>
+    <button id="refreshBtn" type="button" hidden>Refresh</button>
+    <button id="signInBtn" type="button" hidden>Sign in</button>
+    <button id="signOutBtn" type="button" hidden>Sign out</button>
+  </header>
+  <p class="msg" id="msg">Loading…</p>
+  <section id="data" hidden>
+    <div class="tiles">
+      <div class="tile"><small>Players joined</small><b id="total">0</b></div>
+      <div class="tile"><small>Joined today</small><b id="today">0</b></div>
+      <div class="tile"><small>Last 7 days</small><b id="week">0</b></div>
+      <div class="tile"><small>Have a score</small><b id="scored">0</b></div>
+      <div class="tile"><small>Active today</small><b id="active">0</b></div>
+    </div>
+  </section>
+  <div class="wrap" id="tableWrap" hidden>
+    <table>
+      <thead><tr><th>Player</th><th>Email</th><th class="num">Best</th><th>Joined</th><th>Last seen</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+<script type="module">
+import { onAuthStateChanged, signInWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
+import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
+import { auth, db, provider, ADMIN_EMAIL } from './firebase.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const fmt = d => d ? d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+function say(text, isErr) { $('msg').textContent = text; $('msg').className = isErr ? 'msg err' : 'msg'; $('msg').hidden = !text; }
+
+async function load() {
+  say('Loading…');
+  try {
+    const [players, emails] = await Promise.all([getDocs(collection(db, 'players')), getDocs(collection(db, 'emails'))]);
+    const mail = new Map(emails.docs.map(d => [d.id, d.data().email]));
+    const rows = players.docs.map(d => {
+      const p = d.data();
+      return { ...p, email: mail.get(d.id), joined: p.joinedAt?.toDate(), seen: p.lastSeen?.toDate() };
+    }).sort((a, b) => (b.joined || 0) - (a.joined || 0));
+    const day = new Date(); day.setHours(0, 0, 0, 0);
+    const week = Date.now() - 7 * 864e5;
+    $('total').textContent = rows.length;
+    $('today').textContent = rows.filter(r => r.joined >= day).length;
+    $('week').textContent = rows.filter(r => r.joined >= week).length;
+    $('scored').textContent = rows.filter(r => r.best > 0).length;
+    $('active').textContent = rows.filter(r => r.seen >= day).length;
+    $('rows').innerHTML = rows.map(r => `<tr><td>${r.photo ? `<img src="${esc(r.photo)}" alt="" referrerpolicy="no-referrer">` : ''}${esc(r.name)}</td>`
+      + `<td class="dim">${esc(r.email || '—')}</td><td class="num">${r.best || 0}</td><td>${fmt(r.joined)}</td><td>${fmt(r.seen)}</td></tr>`).join('');
+    $('data').hidden = $('tableWrap').hidden = false;
+    say(rows.length ? '' : 'Nobody has signed in yet.');
+  } catch (e) {
+    console.error(e);
+    say('Could not load players: ' + (e.code || e.message), true);
+  }
+}
+
+onAuthStateChanged(auth, user => {
+  const ok = user && user.email === ADMIN_EMAIL;
+  $('signInBtn').hidden = !!user;
+  $('signOutBtn').hidden = !user;
+  $('refreshBtn').hidden = !ok;
+  $('data').hidden = $('tableWrap').hidden = true;
+  if (!user) return say('Sign in with the admin Google account.');
+  if (!ok) return say(user.email + ' is not an admin account.', true);
+  load();
+});
+
+$('signInBtn').addEventListener('click', () => signInWithPopup(auth, provider).catch(e => {
+  if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') say('Sign-in failed: ' + e.code, true);
+}));
+$('signOutBtn').addEventListener('click', () => signOut(auth));
+$('refreshBtn').addEventListener('click', load);
+</script>

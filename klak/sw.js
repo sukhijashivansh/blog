@@ -1,5 +1,5 @@
-const CACHE = 'klak-v3';
-const SHELL = ['/', '/auth.js', '/pwa.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/icon.svg'];
+const CACHE = 'klak-v4';
+const SHELL = ['/', '/auth.js', '/firebase.js', '/pwa.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/icon.svg'];
 const CDN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)\//;
 
 self.addEventListener('install', e => {

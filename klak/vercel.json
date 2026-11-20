@@ -1,8 +1,14 @@
 {
+  "cleanUrls": true,
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "elastic.shivanshsukhija.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "elastic.shivanshsukhija.com"
+        }
+      ],
       "destination": "https://klak.shivanshsukhija.com/$1",
       "permanent": true
     }
