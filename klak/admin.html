@@ -34,10 +34,18 @@ button {
 button:hover { background: var(--hair-soft); }
 .msg { color: var(--ivory-soft); }
 .msg.err { color: var(--ember); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.tile { padding: 16px; background: var(--panel); border: 1px solid var(--hair-soft); border-radius: 12px; }
-.tile small { display: block; font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
-.tile b { display: block; margin-top: 8px; font: 600 34px/1 var(--display); font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--panel); border: 1px solid var(--hair-soft); border-radius: 12px; }
+.tile { min-width: 0; padding: 14px 8px; text-align: center; }
+.tile + .tile { border-left: 1px solid var(--hair-soft); }
+.tile small { display: block; font: 500 10.5px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ivory-dim); white-space: nowrap; }
+.tile b { display: block; margin-top: 8px; font: 600 28px/1 var(--display); font-variant-numeric: tabular-nums; }
+.tile:first-child b { color: var(--brass); }
+@media (max-width: 480px) {
+  .tile { padding: 12px 4px; }
+  .tile small { font-size: 9.5px; letter-spacing: 0.06em; }
+  .tile b { font-size: 22px; }
+}
+.msg { margin: 0; text-align: center; }
 .wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--hair-soft); border-radius: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--hair-soft); }
@@ -54,16 +62,16 @@ td .dim { color: var(--ivory-dim); }
     <button id="signInBtn" type="button" hidden>Sign in</button>
     <button id="signOutBtn" type="button" hidden>Sign out</button>
   </header>
-  <p class="msg" id="msg">Loading…</p>
   <section id="data" hidden>
     <div class="tiles">
-      <div class="tile"><small>Players joined</small><b id="total">0</b></div>
-      <div class="tile"><small>Joined today</small><b id="today">0</b></div>
-      <div class="tile"><small>Last 7 days</small><b id="week">0</b></div>
-      <div class="tile"><small>Have a score</small><b id="scored">0</b></div>
-      <div class="tile"><small>Active today</small><b id="active">0</b></div>
+      <div class="tile" title="Players who have signed in"><small>Players</small><b id="total">0</b></div>
+      <div class="tile" title="Joined today"><small>New today</small><b id="today">0</b></div>
+      <div class="tile" title="Joined in the last 7 days"><small>7 days</small><b id="week">0</b></div>
+      <div class="tile" title="Players with a score on the board"><small>Scored</small><b id="scored">0</b></div>
+      <div class="tile" title="Played or signed in today"><small>Active</small><b id="active">0</b></div>
     </div>
   </section>
+  <p class="msg" id="msg">Loading…</p>
   <div class="wrap" id="tableWrap" hidden>
     <table>
       <thead><tr><th>Player</th><th>Email</th><th class="num">Best</th><th>Joined</th><th>Last seen</th></tr></thead>
@@ -99,7 +107,7 @@ async function load() {
     $('active').textContent = rows.filter(r => r.seen >= day).length;
     $('rows').innerHTML = rows.map(r => `<tr><td>${r.photo ? `<img src="${esc(r.photo)}" alt="" referrerpolicy="no-referrer">` : ''}${esc(r.name)}</td>`
       + `<td class="dim">${esc(r.email || '—')}</td><td class="num">${r.best || 0}</td><td>${fmt(r.joined)}</td><td>${fmt(r.seen)}</td></tr>`).join('');
-    $('data').hidden = $('tableWrap').hidden = false;
+    $('data').hidden = false; $('tableWrap').hidden = !rows.length;
     say(rows.length ? '' : 'Nobody has signed in yet.');
   } catch (e) {
     console.error(e);
