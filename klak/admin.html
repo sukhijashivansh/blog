@@ -74,7 +74,7 @@ td .dim { color: var(--ivory-dim); }
 <script type="module">
 import { onAuthStateChanged, signInWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
 import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
-import { auth, db, provider, ADMIN_EMAIL } from './firebase.js';
+import { auth, db, provider, ADMIN_EMAIL, withTimeout } from './firebase.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -84,7 +84,7 @@ function say(text, isErr) { $('msg').textContent = text; $('msg').className = is
 async function load() {
   say('Loading…');
   try {
-    const [players, emails] = await Promise.all([getDocs(collection(db, 'players')), getDocs(collection(db, 'emails'))]);
+    const [players, emails] = await withTimeout(Promise.all([getDocs(collection(db, 'players')), getDocs(collection(db, 'emails'))]));
     const mail = new Map(emails.docs.map(d => [d.id, d.data().email]));
     const rows = players.docs.map(d => {
       const p = d.data();
@@ -103,7 +103,7 @@ async function load() {
     say(rows.length ? '' : 'Nobody has signed in yet.');
   } catch (e) {
     console.error(e);
-    say('Could not load players: ' + (e.code || e.message), true);
+    say(e.code === 'timeout' ? 'Could not reach the database. Check that Firestore is created, and try with ad-blockers off.' : 'Could not load players: ' + (e.code || e.message), true);
   }
 }
 

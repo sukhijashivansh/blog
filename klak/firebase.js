@@ -16,5 +16,8 @@ export const db = getFirestore(app);
 export const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
+// Firestore retries forever when it can't reach the database; give reads a deadline instead.
+export const withTimeout = (p, ms = 10000) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error('timeout'), { code: 'timeout' })), ms))]);
+
 // Must match isAdmin() in firestore.rules.
 export const ADMIN_EMAIL = 'sukhija.shivansh@gmail.com';

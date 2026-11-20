@@ -1,6 +1,6 @@
 import { onAuthStateChanged, signInWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
-import { auth, db, provider } from './firebase.js';
+import { auth, db, provider, withTimeout } from './firebase.js';
 
 const $ = id => document.getElementById(id);
 const signInBtn = $('signInBtn'), who = $('who'), pic = $('whoPic'), err = $('authErr');
@@ -51,7 +51,7 @@ window.addEventListener('klak:board', async () => {
   const list = $('boardList'), note = $('boardNote');
   list.innerHTML = ''; note.textContent = 'Loading…'; note.hidden = false;
   try {
-    const snap = await getDocs(query(collection(db, 'players'), where('best', '>', 0), orderBy('best', 'desc'), limit(25)));
+    const snap = await withTimeout(getDocs(query(collection(db, 'players'), where('best', '>', 0), orderBy('best', 'desc'), limit(25))));
     list.innerHTML = snap.docs.map((d, i) => {
       const p = d.data();
       return `<li${me && d.id === me.uid ? ' class="me"' : ''}><span class="rank">${i + 1}</span>`
