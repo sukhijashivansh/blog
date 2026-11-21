@@ -213,10 +213,10 @@ button { touch-action: manipulation; }
   <div id="overlay">
     <div class="card" id="menuCard">
       <h1>Klak</h1>
-      <p>Balls roll down the lane toward you. Knock them out before they cross the brass line.</p>
+      <p>Balls swerve down the lane toward you. Knock them out before they cross the brass line.</p>
       <dl class="how">
         <div><dt>Pull</dt><dd>Drag back anywhere on the lane and let go. A longer pull is a faster shot.</dd></div>
-        <div><dt>Move</dt><dd>Slide along the track at the bottom to shift the slingshot.</dd></div>
+        <div><dt>Move</dt><dd>Tilt your phone left or right, or slide along the track at the bottom.</dd></div>
         <div><dt>Bank</dt><dd>Shots bounce off the side rails. A bank hit scores double.</dd></div>
         <div class="hot"><dt>Fire</dt><dd>Every 15 shots that hit load a fireball. It blasts every ball near where it lands.</dd></div>
       </dl>
@@ -227,6 +227,7 @@ button { touch-action: manipulation; }
       </ul>
       <button class="btn" id="playBtn" type="button" disabled>Preparing the lane</button>
       <button class="ghost sound-toggle" id="menuSound" type="button">Sound on</button>
+      <button class="ghost tilt-toggle" type="button" hidden>Tilt on</button>
       <button class="ghost board-btn" type="button">Leaderboard</button>
       <div class="best" id="menuBest"></div>
       <div class="account">
@@ -252,6 +253,7 @@ button { touch-action: manipulation; }
       <h1>Paused</h1>
       <button class="btn" id="resumeBtn" type="button">Resume</button>
       <button class="ghost sound-toggle" id="pauseSound" type="button">Sound on</button>
+      <button class="ghost tilt-toggle" type="button" hidden>Tilt on</button>
     </div>
 
     <div class="card" id="overCard" hidden>
@@ -705,15 +707,16 @@ function wakeOff() { try { if (wake) wake.release(); } catch (e) {} wake = null;
 
 /* ---------- spawning: it only ever gets busier ---------- */
 const levelPace = lv => Math.min(4.2, 1.15 + 0.22 * (lv - 1));   // every level is visibly faster
+const steer = stone => ({ sw: Math.min(210, 56 + 15 * (level - 1)) * (stone ? 0.6 : 1) * U, sx: 0, jt: rnd(0.1, 0.6) });   // how hard a ball can swerve on its own
 function spawnBall(d, force) {
   const stone = force ? force === 'stone' : elapsed > 8 && Math.random() < Math.min(0.55, 0.14 + 0.12 * d);
   const mul = (force ? 1.1 : levelPace(level)) * rnd(0.86, 1.14);
   if (stone) {
     const R = 24 * U, tv = 36 * U * mul;
-    balls.push({ kind: 'stone', img: spr.stone, x: rnd(R, BW - R), y: -R - 8, vx: rnd(-14, 14) * U, vy: tv, tv, R, hp: 2, m: 3, pts: 30, shard: ['#565a62', '#a2a6ae'], flash: 0 });
+    balls.push({ kind: 'stone', img: spr.stone, x: rnd(R, BW - R), y: -R - 8, vx: rnd(-14, 14) * U, vy: tv, tv, R, hp: 2, m: 3, pts: 30, shard: ['#565a62', '#a2a6ae'], flash: 0, ...steer(true) });
   } else {
     const g = GLAZED[(Math.random() * GLAZED.length) | 0], R = 19 * U, tv = 46 * U * mul;
-    balls.push({ kind: 'glazed', img: spr[g.key], x: rnd(R, BW - R), y: -R - 8, vx: rnd(-34, 34) * U, vy: tv, tv, R, hp: 1, m: 1, pts: 10, shard: g.shard, flash: 0 });
+    balls.push({ kind: 'glazed', img: spr[g.key], x: rnd(R, BW - R), y: -R - 8, vx: rnd(-34, 34) * U, vy: tv, tv, R, hp: 1, m: 1, pts: 10, shard: g.shard, flash: 0, ...steer(false) });
   }
 }
 function spawnBubble(d) {
@@ -846,6 +849,24 @@ function fire() {
   if (isFire) { sfx.fire(); buzz(26); } else { sfx.release(pw); buzz(pw > 0.93 ? 16 : 8); }
 }
 
+/* ---------- tilt: the phone's fused accelerometer and gyroscope steer the slingshot ---------- */
+const tilt = { can: !!window.DeviceOrientationEvent && matchMedia('(pointer: coarse)').matches, on: store.get('klak.tilt') !== '0', ok: false, zero: null, a: 0 };
+tilt.on = tilt.can && tilt.on;
+function onTilt(ev) {
+  if (ev.beta === null || ev.gamma === null) return;
+  const rad = Math.PI / 180, roll = Math.asin(clamp(Math.cos(ev.beta * rad) * Math.sin(ev.gamma * rad), -1, 1)) / rad;   // left-right lean, steady at any pitch
+  if (tilt.zero === null) { tilt.zero = roll; tilt.a = 0; return; }             // however the phone is held at the start is centre
+  tilt.a += (roll - tilt.zero - tilt.a) * 0.35;
+}
+async function askTilt() {                          // iPhones only offer the prompt from inside a tap
+  if (!tilt.on || tilt.ok) return;
+  const D = window.DeviceOrientationEvent;
+  try { if (D.requestPermission && await D.requestPermission() !== 'granted') throw 0; }
+  catch (e) { tilt.on = false; tiltLabel(); return; }
+  tilt.ok = true; window.addEventListener('deviceorientation', onTilt);
+}
+function tiltLabel() { document.querySelectorAll('.tilt-toggle').forEach(b => { b.hidden = !tilt.can; b.textContent = tilt.on ? 'Tilt on' : 'Tilt off'; b.setAttribute('aria-pressed', String(tilt.on)); }); }
+
 /* ---------- touch, mouse and keys ---------- */
 const pt = ev => { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
 function onDown(ev) {
@@ -907,6 +928,10 @@ function update(dt) {
 
   // slingshot slides toward where the thumb (or keys) want it; the pouch springs after it
   if (keys.l) sling.tx -= 460 * dt; if (keys.r) sling.tx += 460 * dt;
+  if (state === 'play' && tilt.on && tilt.zero !== null && move.id === null) {     // past a small dead zone, more tilt is a faster slide
+    const m = Math.max(0, Math.abs(tilt.a) - 2.5);
+    if (m > 0) { sling.tx += Math.sign(tilt.a) * Math.min(980, 30 * m + 1.6 * m * m) * U * dt; hintMove = false; }
+  }
   sling.tx = clamp(sling.tx, XMIN, XMAX);
   sling.x += clamp(sling.tx - sling.x, -2400 * dt, 2400 * dt);
   if (aim.on) { pouch.x = clamp(sling.x + aim.px, 10, W - 10); pouch.y = SLY + aim.py; pouch.vx = pouch.vy = 0; }
@@ -919,10 +944,10 @@ function update(dt) {
   if (live || demo) {
     if (live) {
       elapsed += dt;
-      const lv = 1 + Math.floor(elapsed / 20);
+      const lv = 1 + Math.floor(elapsed / 15);
       if (lv !== level) { level = lv; notice = { str: 'Level ' + lv, t: 0 }; sfx.level(); hud(); }
     }
-    const d = demo ? 0.3 : elapsed / 40;
+    const d = demo ? 0.3 : elapsed / 30;
     let solids = 0; for (const b of balls) if (b.kind !== 'bubble') solids++;
     spawnT -= dt;
     if (spawnT <= 0 && solids < 30) { spawnBall(d, demo ? (Math.random() < 0.25 ? 'stone' : 'glazed') : null); spawnT = demo ? 1.5 : Math.max(0.28, 1.4 / (1 + 0.75 * d)) * rnd(0.75, 1.25); }
@@ -938,8 +963,11 @@ function update(dt) {
       if (b.flash > 0) b.flash -= dt;
       if (b.breached) { b.fade -= dt * 2.6; b.vy += 420 * dt; b.y += b.vy * dt; b.x += b.vx * dt; if (b.fade <= 0) b.dead = true; continue; }
       b.vy += (b.tv - b.vy) * Math.min(1, 1.8 * dt);
+      b.jt -= dt;
+      if (b.jt <= 0) { b.sx = (b.sx > 0 ? -1 : 1) * b.sw * rnd(0.55, 1); b.jt = Math.max(0.38, 1.25 - 0.06 * (level - 1)) * rnd(0.7, 1.3); }
+      b.vx += (b.sx - b.vx) * Math.min(1, 5 * dt);
       b.x += b.vx * dt; b.y += b.vy * dt;
-      if (b.x < b.R) { b.x = b.R; b.vx = Math.abs(b.vx) * 0.9; } else if (b.x > BW - b.R) { b.x = BW - b.R; b.vx = -Math.abs(b.vx) * 0.9; }
+      if (b.x < b.R) { b.x = b.R; b.vx = Math.abs(b.vx) * 0.9; b.sx = Math.abs(b.sx); } else if (b.x > BW - b.R) { b.x = BW - b.R; b.vx = -Math.abs(b.vx) * 0.9; b.sx = -Math.abs(b.sx); }
       if (b.y < -b.R * 2 && b.vy < 0) b.vy *= -0.3;
       if (b.y >= BH) {                              // across the brass line
         b.breached = true; b.fade = 1;
@@ -1166,7 +1194,7 @@ function drawTexts() {
   if (notice && state === 'play') label(notice.str.toUpperCase(), W / 2, lerp(yFar, yNear, 0.3), 19 * U, notice.col || '#efe6d4', clamp(Math.min(notice.t / 0.25, (1.8 - notice.t) / 0.4), 0, 1));
   if (state === 'play') {
     if (hintPull && !aim.on) label('Pull back and release', W / 2, yNear - 22 * U, 14 * U, '#efe6d4', 0.8, 500);
-    if (hintMove) label('Slide here to move', W / 2, TRACKY - 22, 13 * U, '#efe6d4', 0.7, 500);
+    if (hintMove) label(tilt.on ? 'Tilt or slide to move' : 'Slide here to move', W / 2, TRACKY - 22, 13 * U, '#efe6d4', 0.7, 500);
   }
   ctx.globalAlpha = 1;
 }
@@ -1219,7 +1247,7 @@ function newGame() {
   audioInit();
   score = 0; lives = 3; combo = 1; level = 1; elapsed = 0; spawnT = 0.5; bubT = 6; shake = hurt = 0; notice = null; charge = 0; fireLoaded = false;
   balls = []; shots = []; shards = []; puffs = []; sparks = []; rings = []; texts = []; flames = []; blasts = []; scorch = [];
-  aim.on = false; move.id = null; perf.t = perf.n = 0; perf.skip = 90;
+  aim.on = false; move.id = null; perf.t = perf.n = 0; perf.skip = 90; tilt.zero = null;
   state = 'play'; show(null); hud(); wakeOn();
 }
 function gameOver() {
@@ -1232,11 +1260,12 @@ function gameOver() {
   window.dispatchEvent(new CustomEvent('klak:score', { detail: { score, level } }));
 }
 function pause() { if (state === 'play') { state = 'pause'; aim.on = false; move.id = null; keys.l = keys.r = false; show('pauseCard'); wakeOff(); } }
-function resume() { if (state === 'pause') { state = 'play'; show(null); perf.t = perf.n = 0; perf.skip = 60; wakeOn(); } }
+function resume() { if (state === 'pause') { state = 'play'; show(null); perf.t = perf.n = 0; perf.skip = 60; tilt.zero = null; wakeOn(); } }
 function soundLabel() { document.querySelectorAll('.sound-toggle').forEach(b => { b.textContent = muted ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(!muted)); }); }
 
-$('playBtn').addEventListener('click', newGame);
-$('againBtn').addEventListener('click', newGame);
+const play = async () => { audioInit(); await askTilt(); newGame(); };
+$('playBtn').addEventListener('click', play);
+$('againBtn').addEventListener('click', play);
 $('resumeBtn').addEventListener('click', resume);
 let boardFrom = 'menuCard';
 document.querySelectorAll('.board-btn').forEach(b => b.addEventListener('click', () => {
@@ -1248,6 +1277,10 @@ $('pauseBtn').addEventListener('click', () => state === 'pause' ? resume() : pau
 document.querySelectorAll('.sound-toggle').forEach(b => b.addEventListener('click', () => {
   muted = !muted; audioInit(); soundLabel(); store.set('snapback.muted', muted ? '1' : '0');
   if (!muted) ping(660, 0.1, 0.07);
+}));
+document.querySelectorAll('.tilt-toggle').forEach(b => b.addEventListener('click', async () => {
+  tilt.on = !tilt.on; tilt.zero = null; store.set('klak.tilt', tilt.on ? '1' : '0');
+  await askTilt(); tiltLabel();
 }));
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 window.addEventListener('pagehide', pause);
@@ -1300,7 +1333,7 @@ async function init() {                             // built in steps so the pag
   // a few balls already on the lane behind the menu
   for (let i = 0; i < 6; i++) { spawnBall(0.3, i === 2 ? 'stone' : 'glazed'); balls[balls.length - 1].y = BH * (0.08 + i * 0.14); }
   for (const f of [0.3, 0.62]) { spawnBubble(0.3); balls[balls.length - 1].y = BH * f; }
-  hud(); soundLabel();
+  hud(); soundLabel(); tiltLabel();
   $('menuBest').textContent = best ? 'Best score ' + best : '';
   ready = true; $('playBtn').disabled = false; $('playBtn').textContent = 'Play';
   requestAnimationFrame(frame);
