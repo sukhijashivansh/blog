@@ -1,4 +1,4 @@
-const CACHE = 'klak-v8';
+const CACHE = 'klak-v9';
 const SHELL = ['/', '/auth.js', '/firebase.js', '/pwa.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/icon.svg'];
 const CDN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs)\//;
 

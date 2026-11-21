@@ -850,13 +850,13 @@ function fire() {
 }
 
 /* ---------- tilt: the phone's fused accelerometer and gyroscope steer the slingshot ---------- */
-const tilt = { can: !!window.DeviceOrientationEvent && matchMedia('(pointer: coarse)').matches, on: store.get('klak.tilt') !== '0', ok: false, zero: null, a: 0 };
+const tilt = { can: !!window.DeviceOrientationEvent && matchMedia('(pointer: coarse)').matches, on: store.get('klak.tilt') !== '0', ok: false, zero: null, to: 0, a: 0 };
 tilt.on = tilt.can && tilt.on;
 function onTilt(ev) {
   if (ev.beta === null || ev.gamma === null) return;
   const rad = Math.PI / 180, roll = Math.asin(clamp(Math.cos(ev.beta * rad) * Math.sin(ev.gamma * rad), -1, 1)) / rad;   // left-right lean, steady at any pitch
-  if (tilt.zero === null) { tilt.zero = roll; tilt.a = 0; return; }             // however the phone is held at the start is centre
-  tilt.a += (roll - tilt.zero - tilt.a) * 0.35;
+  if (tilt.zero === null) { tilt.zero = roll; tilt.to = tilt.a = 0; return; }   // however the phone is held at the start is centre
+  tilt.to = roll - tilt.zero;
 }
 async function askTilt() {                          // iPhones only offer the prompt from inside a tap
   if (!tilt.on || tilt.ok) return;
@@ -929,6 +929,7 @@ function update(dt) {
   // slingshot slides toward where the thumb (or keys) want it; the pouch springs after it
   if (keys.l) sling.tx -= 460 * dt; if (keys.r) sling.tx += 460 * dt;
   if (state === 'play' && tilt.on && tilt.zero !== null && move.id === null) {     // past a small dead zone, more tilt is a faster slide
+    tilt.a += (tilt.to - tilt.a) * Math.min(1, 20 * dt);
     const m = Math.max(0, Math.abs(tilt.a) - 2.5);
     if (m > 0) { sling.tx += Math.sign(tilt.a) * Math.min(980, 30 * m + 1.6 * m * m) * U * dt; hintMove = false; }
   }
