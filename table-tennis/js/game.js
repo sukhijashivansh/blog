@@ -14,6 +14,14 @@ const POINT_PAUSE = 1.3, GAME_PAUSE = 2.6, AI_SERVE_WAIT = 1.2, PRACTICE_PAUSE =
 const LATE = 0.11, LATE_FLICK = 1.5, STRONGER = 1.35;
 // the drawn ball eases onto a replayed path over this long, longer the further it has to go, so it never visibly jumps
 const NUDGE = [0.05, 0.16];
+// playing a friend online. the ball waits at most HOLD (game seconds) at their paddle for their hit to arrive over the internet,
+// then runs up to WARP faster until it has caught up with the time it lost. each end judges what happens on its own half, and
+// the net zone, within NET_ZONE of the net, belongs to whoever sent the invite, so every call has one judge. if a call never
+// comes, the inviter's laptop makes it after WAIT_CALL and the friend's after twice that, so the two can't both step in at once
+const HOLD = 0.3, WARP = 0.6, WAIT_CALL = 2.5, NET_ZONE = 0.3;
+// a ball this long past where you should have met it counts as gone by, and your friend's laptop is told at once, so it never
+// waits at your paddle for a hit that isn't coming
+const PASS = 0.03;
 const speed = v => Math.hypot(v.x, v.y, v.z);
 const mix = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) });
 const put = (to, a, b, t) => { to.x = lerp(a.x, b.x, t); to.y = lerp(a.y, b.y, t); to.z = lerp(a.z, b.z, t); };
@@ -36,11 +44,16 @@ export class Game {
     this.nudge = { x: 0, y: 0, z: 0 };
     this.nudgeTime = NUDGE[0];
     this.late = null;
+    this.remote = null;
+    this.rallyNo = 0;
   }
 
-  // practice = { server } runs the warm-up: no score, and the opponent keeps the ball in play
-  start(levelId, bestOf, firstServer, practice = null) {
+  // practice = { server } runs the warm-up: no score, and the opponent keeps the ball in play.
+  // remote = { host } plays a friend online: their hits, calls and paddle come in over the network instead of from the computer
+  start(levelId, bestOf, firstServer, practice = null, remote = null) {
     this.practice = practice;
+    this.remote = remote ? { host: !!remote.host, farAt: null, hold: 0, holdMax: HOLD, debt: 0, waiting: null, passed: true, ahead: [] } : null;
+    this.rallyNo = 0;
     this.level = practice ? { ...LEVELS[levelId], ...PRACTICE } : LEVELS[levelId];
     this.match = new Match(bestOf, firstServer);
     this.ai = new Opponent(this.level, this.rng);
@@ -68,6 +81,7 @@ export class Game {
 
   beginPoint() {
     const server = this.practice ? this.practice.server : this.match.server;
+    this.rallyNo++;
     this.rally = new Rally(server);
     this.phase = 'serve';
     this.guide = null;
@@ -84,7 +98,12 @@ export class Game {
     b.v = { x: 0, y: 0, z: 0 };
     b.w = { x: 0, y: 0, z: 0 };
     this.aiServe = null;
-    if (server === FAR) {
+    const R = this.remote;
+    if (R) Object.assign(R, { farAt: null, hold: 0, debt: 0, waiting: null });
+    if (server === FAR && R) {
+      // your friend serves from their own paddle. the ball sits in front of it until their toss comes through
+      Object.assign(b.p, this.farServeSpot());
+    } else if (server === FAR) {
       this.aiServeX = (this.rng() - 0.5) * 0.7;
       this.ai.standAt(this.aiServeX);
       b.p = { x: this.aiServeX, y: 1, z: -(TABLE.halfL + 0.14) };
@@ -93,13 +112,31 @@ export class Game {
     }
     // the ball jumps to the server, so don't draw it sliding there
     Object.assign(this.was.ball, b.p);
-    this.events.push({ type: 'serve', server });
+    this.events.push({ type: 'serve', server, rally: this.rallyNo });
+    // anything the friend sent for this point before it began here is played now
+    if (R) {
+      const now = R.ahead.filter(m => m.rally === this.rallyNo);
+      R.ahead = R.ahead.filter(m => m.rally > this.rallyNo);
+      for (const m of now) this[m.kind](m.msg, m.late);
+    }
+  }
+
+  farServeSpot() {
+    const a = this.ai.p;
+    return { x: clamp(a.x, -TABLE.halfW, TABLE.halfW), y: Math.max(a.y + 0.08, TABLE.height + 0.12), z: Math.min(a.z + 0.06, -(TABLE.halfL + 0.04)) };
   }
 
   // the paddle is swept between frames so a fast swing can't skip past the ball
   update(dt, pad) {
     if (this.phase === 'idle' || this.phase === 'over') return;
     this.acc += dt * this.level.timeScale;
+    // catching up on time lost waiting for a friend's hit: the world runs a little fast until it's back in step
+    const R = this.remote;
+    if (R && R.debt > 0) {
+      const extra = Math.min(R.debt, dt * this.level.timeScale * WARP);
+      R.debt -= extra;
+      this.acc += extra;
+    }
     const n = Math.floor(this.acc / STEP);
     this.acc -= n * STEP;
     if (n) {
@@ -126,6 +163,15 @@ export class Game {
     if (this.cooldown > 0) this.cooldown -= STEP;
     if (this.late) this.lateFlick(pad);
     if (this.guide) this.guide.t -= STEP;
+    const R = this.remote;
+    if (R) {
+      if (R.farAt) R.farAt.t -= STEP;
+      if (R.waiting && (R.waiting.t += STEP) > WAIT_CALL * (R.host ? 1 : 2)) this.resolve(R.waiting.call, 'late');
+      if (this.guide && this.guide.t < -PASS && !R.passed && this.phase === 'play') {
+        R.passed = true;
+        this.events.push({ type: 'passed', rally: this.rallyNo, n: this.rally.shots });
+      }
+    }
     if (this.phase === 'serve') this.stepServe(real, cur, pad);
     else if (this.phase === 'toss') this.stepToss(cur, pad);
     else if (this.phase === 'play') this.stepPlay(prev, cur, pad);
@@ -139,7 +185,8 @@ export class Game {
   /* ---------- serving: tip the phone up to toss, flick as it falls. a missed toss just comes back to you ---------- */
   stepServe(real, cur, pad) {
     const b = this.ball;
-    this.ai.update(STEP, b);
+    if (this.remote && this.rally.server === FAR) { Object.assign(b.p, this.farServeSpot()); return; }
+    if (!this.remote) this.ai.update(STEP, b);
     if (this.rally.server === FAR) {
       // it walks over to where it serves from, and only tosses once it's there
       this.wait -= real;
@@ -159,13 +206,15 @@ export class Game {
     this.ball.v = { x: 0, y: TOSS_SPEED, z: 0 };
     this.aiHitY = this.ball.p.y + 0.05;
     this.phase = 'toss';
-    this.events.push({ type: 'toss', who: this.rally.server });
+    this.events.push({ type: 'toss', who: this.rally.server, rally: this.rallyNo, state: cloneBall(this.ball) });
   }
 
   stepToss(cur, pad) {
     const b = this.ball, L = this.level;
     advance(b, STEP, this.onBall);
     if (this.phase !== 'toss' || b.v.y >= 0) return;
+    // your friend's toss: they hit it, or toss again, on their own laptop
+    if (this.remote && this.rally.server === FAR) return;
     if (this.rally.server === FAR) {
       if (b.p.y > this.aiHitY) return;
       this.rally.strike(FAR);
@@ -203,15 +252,20 @@ export class Game {
     this.settle = 0;
     this.rest = null;
     this.ball.v = { x: 0, y: 0, z: 0 };
-    this.events.push({ type: 'retoss' });
+    this.events.push({ type: 'retoss', rally: this.rallyNo });
   }
 
   /* ---------- the rally ---------- */
   stepPlay(prev, cur, pad) {
-    const b = this.ball, before = { ...b.p };
+    const b = this.ball, before = { ...b.p }, R = this.remote;
+    // the ball reached your friend's paddle before their hit came through. it waits there a moment for it
+    if (R && R.farAt && R.farAt.t <= 0 && !R.waiting) {
+      if (R.hold < R.holdMax) { R.hold += STEP; return; }
+      R.farAt = null;
+    }
     advance(b, STEP, this.onBall);
     if (this.phase !== 'play') return;
-    if (this.ai.update(STEP, b) && this.rally.phase === 'bounced') {
+    if (!R && this.ai.update(STEP, b) && this.rally.phase === 'bounced') {
       const call = this.rally.strike(FAR), shot = this.ai.stroke(b, cur.x, this.rally.shots);
       if (call) { b.v = shot.v; b.w = shot.w; this.resolve(call); return; }
       this.applyShot(FAR, shot);
@@ -220,7 +274,8 @@ export class Game {
     if (this.cooldown <= 0 && this.touches(before, prev, cur)) {
       const first = firstContact(b), headed = first?.type === 'table' && first.side === NEAR, at = cloneBall(b);
       const call = this.rally.strike(NEAR, headed), shot = playerStroke(b, pad, this.level, this.hitOff);
-      if (call) { b.v = shot.v; b.w = shot.w; this.cooldown = COOLDOWN; this.resolve(call); return; }
+      // a fault in your own stroke is yours to call, wherever on the table you made it
+      if (call) { b.v = shot.v; b.w = shot.w; this.cooldown = COOLDOWN; this.resolve(call, 'own'); return; }
       this.applyShot(NEAR, shot, pad);
       this.lateFrom('stroke', at, pad, this.hitOff);
     }
@@ -260,7 +315,7 @@ export class Game {
     if (!this.replay(L.ball, shot, L.t)) return;
     const info = describeShot({ p: L.ball.p, v: shot.v, w: shot.w }, L.ball.p.y);
     this.stats.fastest = Math.max(this.stats.fastest, info.speed);
-    this.events.push({ type: 'hit', who: NEAR, ...info, side: pad.forehand ? 'Forehand' : 'Backhand', late: true });
+    this.events.push({ type: 'hit', who: NEAR, ...info, side: pad.forehand ? 'Forehand' : 'Backhand', late: true, rally: this.rallyNo, n: this.rally.shots, state: cloneBall(this.ball) });
     this.readBall();
   }
 
@@ -294,13 +349,86 @@ export class Game {
     if (who === NEAR) this.cooldown = COOLDOWN;
     const info = describeShot(b, hitY);
     if (who === NEAR) this.stats.fastest = Math.max(this.stats.fastest, info.speed);
-    this.events.push({ type: 'hit', who, ...info, side: pad ? (pad.forehand ? 'Forehand' : 'Backhand') : '' });
+    this.events.push({ type: 'hit', who, ...info, side: pad ? (pad.forehand ? 'Forehand' : 'Backhand') : '', rally: this.rallyNo, n: this.rally.shots, state: cloneBall(b) });
     this.readBall();
+  }
+
+  /* ---------- a friend's play, arriving over the network, already turned round to this end of the table ---------- */
+  // late is how long ago, in real seconds, it happened on their laptop
+  hold(kind, msg, late) {
+    if (msg.rally < this.rallyNo || this.phase === 'over') return true;
+    if (msg.rally > this.rallyNo || this.phase === 'dead' || this.phase === 'break') { this.remote.ahead.push({ kind, msg, late }); return true; }
+    return false;
+  }
+
+  remoteToss(msg, late = 0) {
+    if (this.hold('remoteToss', msg, late) || this.rally.server !== FAR || this.phase !== 'serve') return;
+    this.remote.waiting = null;
+    Object.assign(this.ball, cloneBall(msg.ball));
+    Object.assign(this.was.ball, this.ball.p);
+    this.phase = 'toss';
+    this.events.push({ type: 'toss', who: FAR, rally: this.rallyNo });
+  }
+
+  // their toss dropped out of reach. if it fell far enough here to look like a missed serve, that call is dropped
+  remoteRetoss(msg) {
+    if (this.hold('remoteRetoss', msg, 0) || this.rally.server !== FAR || this.phase !== 'toss') return;
+    this.remote.waiting = null;
+    this.phase = 'serve';
+    this.ball.v = { x: 0, y: 0, z: 0 };
+  }
+
+  remoteShot(msg, late = 0) {
+    if (this.hold('remoteShot', msg, late)) return;
+    const R = this.remote, r = this.rally;
+    if (msg.late) {
+      // a late flick on their side replayed a shot this laptop already has: swap in the stronger path
+      if (r.striker !== FAR || r.shots !== msg.n) return;
+    } else {
+      if (r.striker === FAR && r.shots >= msg.n) return;
+      // their laptop already judged this strike legal, so the rally moves on even if this end would have read it differently
+      if (r.phase === 'toss') { r.phase = 'serve-own'; r.striker = FAR; r.shots = 1; }
+      else { r.striker = FAR; r.phase = 'flying'; r.shots = msg.n; }
+    }
+    const from = this.ball.p, to = msg.ball.p, u = this.nudge, w = this.was.ball;
+    for (const k of ['x', 'y', 'z']) { u[k] += from[k] - to[k]; w[k] += to[k] - from[k]; }
+    this.nudgeTime = clamp(NUDGE[0] + Math.hypot(u.x, u.y, u.z) * 0.25, ...NUDGE);
+    this.ball.p = { ...to };
+    this.ball.v = { ...msg.ball.v };
+    this.ball.w = { ...msg.ball.w };
+    this.phase = 'play';
+    this.guide = null;
+    R.farAt = null;
+    R.hold = 0;
+    R.waiting = null;
+    // the time it spent on the way is made up by running a little fast
+    R.debt = Math.min(late, 0.4) * this.level.timeScale;
+    if (!msg.late) this.events.push({ type: 'hit', who: FAR, speed: msg.info?.speed || speed(msg.ball.v), name: msg.info?.name || '', rpm: msg.info?.rpm || 0, side: '', rally: this.rallyNo, n: r.shots });
+    this.readBall();
+  }
+
+  // the ball went past your friend's paddle on their laptop, so it carries on here too
+  remotePass(msg) {
+    if (this.hold('remotePass', msg, 0) || this.rally.striker !== NEAR || this.rally.shots !== msg.n) return;
+    this.remote.farAt = null;
+  }
+
+  remotePoint(msg) {
+    if (this.hold('remotePoint', msg, 0)) return;
+    this.resolve({ type: msg.kind === 'let' ? 'let' : 'point', winner: msg.winner, reason: msg.reason }, 'told');
+  }
+
+  // which end owns a call: yours on your half, your friend's on theirs, and the net zone the inviter's
+  mine() {
+    const z = this.ball.p.z;
+    return this.remote.host ? z > -NET_ZONE : z > NET_ZONE;
   }
 
   onBall(type, speed, side) {
     if (speed > 0.2) this.events.push({ type: 'bounce', on: type, speed, side });
     if (this.phase !== 'toss' && this.phase !== 'play') return;
+    // waiting on your friend's call: the ball keeps bouncing, but nothing more is judged here
+    if (this.remote?.waiting) return;
     const was = this.rally.phase;
     const call = type === 'table' ? this.rally.table(side) : type === 'net' ? this.rally.net() : this.rally.dead();
     if (call) { this.resolve(call); return; }
@@ -316,13 +444,30 @@ export class Game {
     else if (phase === 'flying' || phase === 'bounced') who = other(striker);
     else return;
     const bounced = phase === 'bounced';
+    if (who === FAR && this.remote) {
+      // where your friend should meet it, so the ball can wait there if their hit is still on its way
+      const seen = predictStrike(this.ball, FAR, bounced);
+      this.remote.farAt = seen.valid ? { t: seen.t } : null;
+      this.remote.hold = 0;
+      return;
+    }
     if (who === FAR) { this.ai.read(this.ball, bounced); return; }
     const seen = predictStrike(this.ball, NEAR, bounced);
     this.guide = seen.valid ? seen : null;
+    if (this.remote) this.remote.passed = !this.guide;
   }
 
   /* ---------- ending the point ---------- */
-  resolve(call) {
+  // how, playing a friend: 'auto' judges it here if it happened on this end, 'own' is a fault in your own stroke, 'told' is your
+  // friend's call arriving and 'late' a call of theirs that never came. every call made here is sent to them
+  resolve(call, how = 'auto') {
+    const R = this.remote;
+    if (R) {
+      // on your friend's half it's theirs to call. the ball plays on while their call comes through
+      if (how === 'auto' && !this.mine()) { if (!R.waiting) R.waiting = { call, t: 0 }; return; }
+      if (how !== 'told') this.events.push({ type: 'decided', rally: this.rallyNo, winner: call.winner, reason: call.reason, kind: call.type });
+      R.waiting = null;
+    }
     this.phase = 'dead';
     this.timer = POINT_PAUSE;
     this.guide = null;
@@ -335,19 +480,19 @@ export class Game {
     }
     if (call.type === 'let') {
       this.result = {};
-      this.events.push({ type: 'let', reason: call.reason });
+      this.events.push({ type: 'let', reason: call.reason, rally: this.rallyNo });
       return;
     }
     this.result = this.match.point(call.winner);
-    this.ai.adapt(call.winner === NEAR);
+    if (!R) this.ai.adapt(call.winner === NEAR);
     this.stats.longest = Math.max(this.stats.longest, this.rally.shots);
     this.stats[call.winner === NEAR ? 'won' : 'lost']++;
-    this.events.push({ type: 'point', winner: call.winner, reason: call.reason, ...this.result });
+    this.events.push({ type: 'point', winner: call.winner, reason: call.reason, rally: this.rallyNo, ...this.result });
   }
 
   stepDead(real) {
     advance(this.ball, STEP, this.onBall);
-    this.ai.update(STEP, this.ball);
+    if (!this.remote) this.ai.update(STEP, this.ball);
     this.timer -= real;
     if (this.timer > 0) return;
     if (this.result.matchOver) {

@@ -5,6 +5,7 @@ import { Playout } from '../js/playout.js';
 import { PhonePaddle, HOME, GAIN } from '../js/phone-paddle.js';
 import { Game } from '../js/game.js';
 import { NEAR, FAR } from '../js/config.js';
+import { Versus } from '../js/versus.js';
 
 const DEG = 180 / Math.PI;
 
@@ -269,4 +270,63 @@ export function track(pipe = pipeline(), { net = 'wifi', fps = 60, seed = 2, sec
   for (let i = 1; i < use.length; i++) steps.push(Math.abs(use[i].x - use[i - 1].x - (at(use[i].t - best.lag, 'tx') - at(use[i - 1].t - best.lag, 'tx'))));
   steps.sort((a, b) => a - b);
   return { lag: best.lag, step: steps[Math.floor(steps.length * 0.99)], worst: steps.at(-1) };
+}
+
+// two players at their own laptops, each with a phone, playing each other over the internet. ms is the one-way delay between
+// the laptops and jitter how much it wobbles. the link keeps messages in order, as the game's does. the second laptop's clock
+// reads quite differently, as it would in real life
+// tweak(side, event) can change a shot before it's sent, to play one the bots never would
+export function duel({ seconds = 300, ms = 40, jitter = 10, seed = 1, bestOf = 1, skill = {}, level = 2, onFrame, tweak } = {}) {
+  const r = rng(seed), wire2 = rng(seed + 41), clockB = 987.65;
+  const sides = [0, 1].map(i => {
+    const game = new Game(rng(seed + 100 + i)), versus = new Versus({ host: i === 0 });
+    return { i, game, versus, player: new Player(rng(seed + 200 + i), skill), wifi: new Net(NETS.wifi, rng(seed + 300 + i)), phone: new Motion(), link: new Playout(), paddle: new PhonePaddle(), clock: i ? clockB : 0, next: { sense: r() / 60, frame: r() / 60 }, last: 0, lastSense: 0, events: [], holds: [] };
+  });
+  const internet = [], lastAt = [0, 0];
+  for (const s of sides) s.versus.send = msg => {
+    const to = 1 - s.i, at = Math.max(tNow + ms / 1000 + (wire2() * 2 - 1) * jitter / 1000, lastAt[to] + 1e-6);
+    lastAt[to] = at;
+    internet.push({ at, to: sides[to], msg: JSON.parse(JSON.stringify(msg)) });
+  };
+  const first = r() < 0.5 ? NEAR : FAR;
+  let tNow = 0;
+  sides[0].game.start(level, bestOf, first, null, { host: true });
+  sides[1].game.start(level, bestOf, first === NEAR ? FAR : NEAR, null, { host: false });
+  for (const s of sides) s.versus.attach(s.game, s.clock);
+  const done = () => sides.every(s => s.game.phase === 'over');
+  while (tNow < seconds && !done()) {
+    let t = Infinity;
+    for (const s of sides) t = Math.min(t, s.next.sense, s.next.frame, ...s.wifi.q.map(p => p.t));
+    for (const p of internet) t = Math.min(t, p.at);
+    tNow = t;
+    // laptop to laptop
+    for (const p of internet.filter(q => q.at <= t).sort((a, b) => a.at - b.at)) p.to.versus.receive(p.msg, t + p.to.clock);
+    for (let i = internet.length - 1; i >= 0; i--) if (internet[i].at <= t) internet.splice(i, 1);
+    for (const s of sides) {
+      for (const p of s.wifi.take(t)) s.link.push(p.msg, p.t);
+      if (t >= s.next.sense) {
+        const o = s.player.orient(t, t - s.lastSense || 1 / 60);
+        s.lastSense = t;
+        s.phone.orient(o.alpha, o.beta, o.gamma, t - 4321);
+        s.phone.motion({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 9.81 }, t - 4321);
+        s.wifi.send(wire(s.phone.sample()), t);
+        s.next.sense = t + 1 / 60;
+      }
+      if (t >= s.next.frame) {
+        const dt = s.last ? t - s.last : 1 / 60;
+        s.last = t;
+        const state = s.link.read(t), pose = s.paddle.tick(dt, t, s.game.assist, state);
+        s.versus.tick(t + s.clock, pose, dt);
+        const holding = s.game.remote.hold;
+        s.game.update(Math.min(dt, 0.05), pose);
+        if (s.game.remote.hold > 0) s.holds.push(s.game.remote.hold);
+        const events = s.game.drain();
+        for (const e of events) { tweak?.(s, e); s.versus.onEvent(e, t + s.clock); s.events.push(e); }
+        onFrame?.({ t, side: s, pose, events, holding });
+        s.player.think(s.game, pose, t);
+        s.next.frame = t + 1 / 60;
+      }
+    }
+  }
+  return sides;
 }

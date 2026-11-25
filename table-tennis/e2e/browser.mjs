@@ -118,38 +118,42 @@ for (let i = 0; i < 8 && !served; i++) {
   await phone.evaluate(() => __flick(28));
   await sleep(640);
   await phone.evaluate(() => __flick());
-  served = !!await until(async () => (await lap.textContent('#title')) === 'Pick your level', 2600);
+  served = !!await until(async () => (await lap.textContent('#title')) === 'Pick your opponent', 2600);
 }
 check('a serve goes in and the warm-up finishes', served, served ? '' : `title: ${await lap.textContent('#title')}`);
-if (!served) { await phone.click('#menu button:has-text("Skip")').catch(() => {}); await until(async () => (await lap.textContent('#title')) === 'Pick your level', 4000); }
+if (!served) { await phone.click('#menu button:has-text("Skip")').catch(() => {}); await until(async () => (await lap.textContent('#title')) === 'Pick your opponent', 4000); }
 
 // menus answered from the phone
-const levels = await until(async () => { const b = await phone.$$eval('#menu button b', bs => bs.map(b => b.textContent)); return b.length >= 4 ? b : null; }, 4000);
-check('phone lists the levels', !!levels && levels.join(',') === 'Beginner,Club,Pro,Replay the warm-up', levels?.join(', '));
+const levels = await until(async () => { const b = await phone.$$eval('#menu button b', bs => bs.map(b => b.textContent)); return b.length >= 5 ? b : null; }, 4000);
+check('phone lists the opponents', !!levels && levels.join(',') === 'Beginner,Club,Pro,A friend,Replay the warm-up', levels?.join(', '));
 await phone.click('#menu button:has-text("Club")');
 check('tapping a level asks how long', !!await until(async () => (await lap.textContent('#title')) === 'Club. How long?', 4000));
 await until(async () => (await phone.$$('#menu button')).length === 3, 3000);
 await phone.click('#menu button:has-text("One game")');
 check('match starts after the coin toss', !!await until(() => lap.isVisible('#board'), 6000));
 
-// play: frame pacing on the game tab while the phone aims and flicks
+// play: frame pacing on the game tab while the phone aims and flicks. a player serves when told to, and otherwise keeps flicking
+// at whatever comes. stopping waits for a serve in progress to finish
+function player(game, ph) {
+  let serving = false;
+  const timer = setInterval(async () => {
+    if (serving) return;
+    const title = await game.textContent('#title').catch(() => '');
+    if (title === 'Your serve') {
+      serving = true;
+      await ph.evaluate(() => { __pose.alpha = 40; __flick(28); }).catch(() => {});
+      await sleep(640);
+      await ph.evaluate(() => __flick()).catch(() => {});
+      await sleep(1200);
+      serving = false;
+    } else ph.evaluate(() => { __pose.alpha = 40 + (Math.random() - 0.5) * 16; __flick(); }).catch(() => {});
+  }, 900);
+  return async () => { clearInterval(timer); while (serving) await sleep(100); };
+}
 await lap.evaluate(() => { window.__frames = []; let last = 0; const f = t => { if (last) window.__frames.push(t - last); last = t; requestAnimationFrame(f); }; requestAnimationFrame(f); });
-let serving = false;
-const rally = setInterval(async () => {
-  if (serving) return;
-  const title = await lap.textContent('#title').catch(() => '');
-  if (title === 'Your serve') {
-    serving = true;
-    await phone.evaluate(() => { __pose.alpha = 40; __flick(28); }).catch(() => {});
-    await sleep(640);
-    await phone.evaluate(() => __flick()).catch(() => {});
-    await sleep(1200);
-    serving = false;
-  } else phone.evaluate(() => { __pose.alpha = 40 + (Math.random() - 0.5) * 16; __flick(); }).catch(() => {});
-}, 900);
+const stopPlaying = player(lap, phone);
 await sleep(25000);
-clearInterval(rally);
-while (serving) await sleep(100);
+await stopPlaying();
 const score = await lap.evaluate(() => [...document.querySelectorAll('.pts')].map(e => +e.textContent));
 check('points are being played', score[0] + score[1] > 0, `score ${score.join('-')}`);
 const frames = await lap.evaluate(() => window.__frames.slice(30));
@@ -197,7 +201,7 @@ check('a reopened phone picks the match back up', !!await until(async () => (awa
 // the game tab reloads: the paired phone finds it again by itself
 await lap.reload();
 await lap.mouse.click(640, 400);
-check('after a game reload the phone reconnects on its own', !!await until(async () => (await lap.textContent('#title')) === 'Pick your level', 30000), `title: ${await lap.textContent('#title')}`);
+check('after a game reload the phone reconnects on its own', !!await until(async () => (await lap.textContent('#title')) === 'Pick your opponent', 30000), `title: ${await lap.textContent('#title')}`);
 check('same pairing code after reload', (await until(async () => { const t = await lap.textContent('#link'); return t.startsWith('http') ? t : null; }, 10000)) === link);
 
 await lap.keyboard.press('d');
@@ -210,6 +214,63 @@ if (local) {
   const last = timed.at(-1);
   if (last) console.log(`      last report: reading→frame ${Math.round(last.lag.p50)} ms, round trip ${Math.round(last.trip.avg)} ms, lands after ${Math.round(last.way.p50)} ms, buffer ${Math.round(last.buffer.delay * 1000)} ms, phone ${last.phone.hz}/s`);
 }
+// two players, each at their own laptop with their own phone, play each other online
+const scoreOf = page => page.evaluate(() => [...document.querySelectorAll('.pts')].map(e => +e.textContent));
+await phone.click('#menu button:has-text("A friend")');
+check('picking "A friend" shows an invite link', !!await until(async () => (await lap.textContent('#title')) === 'Invite a friend' && await lap.isVisible('#invite'), 4000), await lap.textContent('#title'));
+const invite = await lap.inputValue('#inviteLink');
+check('the invite link carries this laptop\'s pairing id', invite === `${base}#join=${new URL(link).hash.slice(1)}`, invite);
+const lapB = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+watch(lapB, 'friend\'s game');
+await lapB.goto(invite);
+await lapB.mouse.click(640, 400);
+check('the friend\'s laptop says they were invited', !!await until(async () => (await lapB.textContent('#sub')).includes('invited you to a match'), 30000), await lapB.textContent('#sub'));
+check('the inviter sees their friend arrive', !!await until(async () => (await lap.textContent('#hint')).includes('pairing their phone'), 10000), await lap.textContent('#hint'));
+const linkB = await until(async () => { const t = await lapB.textContent('#link'); return t.startsWith('http') ? t : null; }, 30000);
+const phoneB = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })).newPage();
+watch(phoneB, 'friend\'s phone');
+await phoneB.goto(new URL(new URL(linkB).pathname + new URL(linkB).hash, base).href);
+await until(() => phoneB.isEnabled('#go'), 30000);
+await phoneB.evaluate(SENSORS);
+await phoneB.click('#go');
+check('a first-time friend warms up, and the inviter is told', !!await until(async () => (await lap.textContent('#hint')).includes('warming up'), 10000), await lap.textContent('#hint'));
+await until(() => phoneB.isVisible('#menu button:has-text("Skip")'), 4000);
+await phoneB.click('#menu button:has-text("Skip")');
+check('then the friend waits for the inviter', !!await until(async () => (await lapB.textContent('#title')) === 'Waiting for your friend', 6000), await lapB.textContent('#title'));
+check('and the inviter picks how long to play', !!await until(async () => (await lap.textContent('#title')) === 'Your friend is ready. How long?', 6000), await lap.textContent('#title'));
+await until(async () => (await phone.$$('#menu button')).length === 3, 3000);
+await phone.click('#menu button:has-text("One game")');
+check('the match starts on both laptops', !!await until(async () => await lap.isVisible('#board') && await lapB.isVisible('#board'), 8000));
+check('each scoreboard names the other player', (await lap.textContent('#foeName')) === 'Friend' && (await lapB.textContent('#foeName')) === 'Friend');
+const stopA = player(lap, phone), stopB = player(lapB, phoneB);
+await sleep(30000);
+const agreed = await until(async () => { const [a, b] = [await scoreOf(lap), await scoreOf(lapB)]; return a[0] + a[1] > 0 && a[0] === b[1] && a[1] === b[0] ? a : null; }, 10000);
+check('both laptops show the same score', !!agreed, `inviter ${(await scoreOf(lap)).join('-')}, friend ${(await scoreOf(lapB)).join('-')}`);
+await stopA();
+await stopB();
+await lapB.screenshot({ path: path.join(OUT, 'e2e-friend.png') });
+
+// a third laptop with the same link while the match is on is turned away
+const lapC = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+watch(lapC, 'third game');
+await lapC.goto(invite);
+check('a third laptop with the same link is turned away', !!await until(async () => (await lapC.textContent('#call')).includes('isn\'t inviting anyone'), 30000), await lapC.textContent('#call'));
+await lapC.context().close();
+
+// the friend's phone drops out: both games stop, and both carry on once it's back
+await phoneB.evaluate(() => { __on = false; });
+check('a friend\'s phone dropping out pauses both games', !!await until(async () => (await lapB.textContent('#title')) === 'Paused' && (await lap.textContent('#title')) === 'Your friend\'s phone dropped out', 8000), `inviter: ${await lap.textContent('#title')}, friend: ${await lapB.textContent('#title')}`);
+await phoneB.evaluate(() => { __on = true; });
+const counting = ['3', '2', '1'], held = ['Paused', 'Your friend\'s phone dropped out', ...counting];
+check('both count back in together', !!await until(async () => counting.includes(await lap.textContent('#title')) && counting.includes(await lapB.textContent('#title')), 5000));
+check('and play on', !!await until(async () => !held.includes(await lap.textContent('#title')) && !held.includes(await lapB.textContent('#title')), 8000));
+
+// the friend's laptop closes: the inviter is told and goes back to the menu
+await lapB.context().close();
+await phoneB.context().close();
+check('when the friend\'s laptop closes, the inviter goes back to the menu', !!await until(async () => (await lap.textContent('#title')) === 'Pick your opponent', 20000), await lap.textContent('#title'));
+check('and the board goes back to the computer', (await lap.textContent('#foeName')) === 'Opponent' && !(await lap.isVisible('#board')));
+
 // once google sign-in is switched on, the game waits behind the sign-in card. firebase's answer is stood in for here
 const gatedPage = await lapCtx.newPage();
 watch(gatedPage, 'gated game');

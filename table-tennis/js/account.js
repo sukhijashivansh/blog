@@ -137,6 +137,8 @@ onAuthStateChanged(auth, user => {
   me = user;
   record = null;
   known = true;
+  // the first name is what a friend sees across the table when playing online
+  dispatchEvent(new CustomEvent('tt:me', { detail: { name: user ? (user.displayName || '').split(' ')[0].slice(0, 24) : '' } }));
   render();
   showLeaders();
   if (user) sync();

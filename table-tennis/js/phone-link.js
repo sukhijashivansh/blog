@@ -42,6 +42,10 @@ export class PhoneLink {
     this.trips = [];
     this.ways = [];
     this.phone = null;
+    // a friend's laptop connects to the same pairing id as the phone does, saying it's a friend. onFriend takes it from there,
+    // and onError hears about a friend's game that can't be found
+    this.onFriend = null;
+    this.onError = null;
     setInterval(() => this.ping(), PING_MS);
   }
 
@@ -61,9 +65,13 @@ export class PhoneLink {
       this.url = new URL(`phone.html#${got}`, isLocal() ? LIVE : location.href).href;
       if (!this.paired) this.state = 'waiting';
     });
-    peer.on('connection', conn => this.accept(conn));
+    peer.on('connection', conn => {
+      if (conn.metadata?.role === 'friend') { if (this.onFriend) this.onFriend(conn); else conn.close(); }
+      else this.accept(conn);
+    });
     peer.on('disconnected', () => this.retry(peer));
     peer.on('error', e => {
+      if (peer === this.peer) this.onError?.(e);
       if (e.type === 'unavailable-id') {
         peer.destroy();
         const again = ++this.tries < ID_TRIES;
@@ -164,6 +172,11 @@ export class PhoneLink {
   }
 
   takeTap() { return this.taps.length ? this.taps.shift() : null; }
+
+  // opens a link to a friend's game, on their laptop's pairing id. messages there must arrive, and in order
+  callFriend(id) {
+    return this.peer?.open ? this.peer.connect(id, { serialization: 'json', reliable: true, metadata: { role: 'friend' } }) : null;
+  }
 
   send(msg) { if (this.paired) this.conn.send(msg); }
 

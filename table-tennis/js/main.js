@@ -6,6 +6,7 @@ import { PhonePaddle } from './phone-paddle.js';
 import { View } from './view.js';
 import { Sound } from './sound.js';
 import { Hud } from './hud.js';
+import { Versus } from './versus.js';
 
 const $ = id => document.getElementById(id);
 // GRACE rides out dropped readings. the game only pauses once the phone has really gone quiet
@@ -22,6 +23,20 @@ let view, mode = 'boot', resume = 'play', last = 0, timer = 0, levelId = 2, best
 let gated = true;
 const GATE_WAIT = 12000;
 let lesson = 0, lessonDone = 0, nextIn = 0, sides = { l: false, r: false };
+
+// playing a friend online, each at their own laptop with their own phone. the invite link carries this laptop's pairing id, and
+// the friend's laptop connects to it. online is { host, name, here, status, held, holds, quiet, want, wants } while that's on:
+// host is whether this laptop sent the invite, here whether the friend's laptop is connected, status how far along the friend is,
+// held and holds whether this end or theirs has stopped the match for a phone that dropped out, quiet whether their laptop has
+// gone silent, and want and wants whether this end or theirs has asked for a rematch. a friend's matches are played at Club
+// pace and don't count towards league points. a friend's laptop that can't be found is tried JOIN_TRIES times, JOIN_RETRY
+// seconds apart, and one that hasn't answered in JOIN_WAIT seconds counts as not found. SILENT seconds without a word stops the match
+const PROTOCOL = 1, FRIEND_LEVEL = 2, JOIN_TRIES = 5, JOIN_RETRY = 3, JOIN_WAIT = 15, SILENT = 1.2;
+const joinId = (new URLSearchParams(location.hash.slice(1)).get('join') || '').replace(/[^\w-]/g, '').slice(0, 64);
+let versus = null, online = joinId ? { host: false } : null, myName = '', joinTries = 0, joinAt = 0, copyTimer = 0;
+// the other player, as the screens name them
+const foe = () => (online ? online.name || 'Your friend' : 'Opponent');
+const foeIn = () => (online ? online.name || 'your friend' : 'the opponent');
 
 const LESSONS = [
   { key: 'move', title: 'Point your phone', sub: 'The red paddle goes where you point. Touch the ring on each side.', demo: 'sway', need: 2 },
@@ -40,11 +55,12 @@ function pick(allowed) {
 
 function askLevel() {
   mode = 'level';
-  hud.say('Pick your level', 'Tap one on your phone');
+  hud.say('Pick your opponent', 'Tap one on your phone');
   hud.choices([
     { n: 1, label: 'Beginner', note: 'Slow and friendly' },
     { n: 2, label: 'Club', note: 'A fair game' },
     { n: 3, label: 'Pro', note: 'Fast, with spin' },
+    { n: 4, label: 'A friend', note: 'Online, anywhere' },
   ]);
   hud.hint('Your phone can replay the warm-up too');
 }
@@ -52,7 +68,7 @@ function askLevel() {
 function askFormat() {
   mode = 'format';
   timer = FORMAT_WAIT;
-  hud.say(`${LEVELS[levelId].name}. How long?`, 'Tap one on your phone');
+  hud.say(online ? `${foe()} is ready. How long?` : `${LEVELS[levelId].name}. How long?`, 'Tap one on your phone');
   hud.choices([
     { n: 1, label: 'One game', note: 'First to 11' },
     { n: 2, label: 'Best of 3', note: 'First to 2 games' },
@@ -63,15 +79,20 @@ function askFormat() {
 function coinToss() {
   mode = 'coin';
   timer = 1.8;
-  firstServer = Math.random() < 0.5 ? NEAR : FAR;
+  // playing a friend, the inviter's laptop tosses the coin and tells the other one how it fell
+  if (!online || online.host) firstServer = Math.random() < 0.5 ? NEAR : FAR;
+  if (online?.host) versus.send({ k: 'setup', bestOf, first: firstServer === NEAR ? 'me' : 'you' });
+  if (online) Object.assign(online, { want: false, wants: false });
   hud.choices();
   hud.hint();
-  hud.say('Coin toss', firstServer === NEAR ? 'You serve first' : 'Opponent serves first');
+  hud.say('Coin toss', firstServer === NEAR ? 'You serve first' : `${foe()} serves first`);
 }
 
 function kickOff() {
-  game.start(levelId, bestOf, firstServer);
+  game.start(levelId, bestOf, firstServer, null, online ? { host: online.host } : null);
+  versus?.attach(game, performance.now() / 1000);
   view.setReach(game.level.hitRadius);
+  $('foeName').textContent = online ? online.name || 'Friend' : 'Opponent';
   $('board').hidden = false;
   mode = 'play';
   hud.say('');
@@ -119,7 +140,8 @@ function finishCoach() {
   view.setBeacons([]);
   hud.pips(0, 0);
   hud.meter(0);
-  askLevel();
+  if (online) toLobby();
+  else askLevel();
 }
 
 const FLOW = {
@@ -132,8 +154,9 @@ const FLOW = {
     paddle.calibrate();
     hud.meter(0);
     document.body.classList.remove('finding');
-    if (store.get('tt.warm')) askLevel();
-    else startCoach();
+    if (!store.get('tt.warm')) startCoach();
+    else if (online) toLobby();
+    else askLevel();
   },
   coach(dt, s, now, pose) {
     if (lostPhone(now)) return;
@@ -156,9 +179,26 @@ const FLOW = {
     }
   },
   level() {
-    const got = pick([0, 1, 2, 3]);
+    const got = pick([0, 1, 2, 3, 4]);
     if (got === 0) startCoach();
+    else if (got === 4) startInvite();
     else if (got) { levelId = got; askFormat(); }
+  },
+  // the inviter waits here for their friend to open the link, pair a phone and be ready
+  invite() {
+    if (pick([0]) === 0) { endOnline(); return; }
+    const o = online;
+    hud.hint(!o.here ? 'Waiting for your friend to open the link' : o.status === 'warming' ? `${foe()} is here and warming up` : o.status === 'ready' ? '' : `${foe()} is here and pairing their phone`);
+    if (o.here && o.status === 'ready') {
+      $('invite').hidden = true;
+      askFormat();
+    }
+  },
+  // the friend who was invited waits here for the inviter to pick how long to play
+  lobby() {
+    if (pick([0]) === 0) { endOnline(); return; }
+    if (online.here) hud.say(`Waiting for ${foeIn()}`, 'They pick how long to play. Keep your phone in hand.');
+    else hud.say('Connecting to your friend\'s game', 'One moment.');
   },
   format(dt) {
     const got = pick([1, 2, 3]);
@@ -177,12 +217,17 @@ const FLOW = {
   paused(dt, s) {
     timer = clamp(timer + (s ? dt : -dt), 0, BACK_AFTER);
     hud.meter(timer / BACK_AFTER);
-    if (timer < BACK_AFTER) return;
+    // paused for a friend's phone, this one may drop out too, and then they wait for it as well
+    if (timer < BACK_AFTER) { if (!s) hold(true); return; }
     hud.meter(0);
+    hold(false);
+    // playing a friend, the match only carries on once both phones are back
+    if (online?.holds || online?.quiet) return;
     timer = COUNTDOWN;
     mode = 'countdown';
   },
   countdown(dt) {
+    if (online?.holds || online?.quiet) { friendHeld(); return; }
     timer -= dt;
     hud.say(String(Math.max(Math.ceil(timer), 1)), 'Get ready');
     if (timer > 0) return;
@@ -193,10 +238,154 @@ const FLOW = {
   },
   over() {
     const got = pick([1, 2]);
-    if (got === 1) coinToss();
-    else if (got === 2) askLevel();
+    if (!online) {
+      if (got === 1) coinToss();
+      else if (got === 2) askLevel();
+      return;
+    }
+    // a rematch needs both players to ask for one, and the inviter's laptop starts it
+    if (got === 2) { endOnline(); return; }
+    if (got === 1 && !online.want) {
+      online.want = true;
+      versus.send({ k: 'again' });
+    }
+    hud.hint(online.want ? `Waiting for ${foeIn()} to choose` : online.wants ? `${foe()} wants a rematch` : '');
+    if (online.host && online.want && online.wants) coinToss();
   },
 };
+
+/* ---------- playing a friend online ---------- */
+function startInvite() {
+  mode = 'invite';
+  online = { host: true };
+  levelId = FRIEND_LEVEL;
+  hud.choices();
+  hud.say('Invite a friend', 'Send them this link. They open it on their laptop or tablet and pair their own phone, then you pick how long to play.');
+  $('inviteLink').value = `${location.origin}${location.pathname}#join=${link.peer.id}`;
+  $('inviteShare').hidden = !navigator.share;
+  $('invite').hidden = false;
+}
+
+function toLobby() {
+  mode = 'lobby';
+  $('board').hidden = true;
+  hud.choices();
+  hud.hint();
+}
+
+// ends playing a friend. why says what happened when it wasn't this player's own choice, and then the friend isn't told again
+function endOnline(why = '') {
+  if (!online) return;
+  versus?.close(why ? '' : 'leave');
+  versus = null;
+  online = null;
+  joinTries = 0;
+  $('invite').hidden = true;
+  $('foeName').textContent = 'Opponent';
+  // a reload shouldn't join the same friend again
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  if (why) hud.flash(why, 4);
+  // still pairing a phone or warming up, that carries on, and the menu comes after it as usual
+  if (mode === 'find' || mode === 'coach') return;
+  game.phase = 'idle';
+  game.drain();
+  $('board').hidden = true;
+  hud.meter(0);
+  askLevel();
+}
+
+// the invited laptop calls the inviter's, and tries again if it isn't there yet
+function join(now) {
+  const conn = link.callFriend(joinId);
+  if (!conn) return;
+  versus = new Versus({ host: false });
+  versus.use(conn);
+  online.since = now;
+}
+
+function joinFailed(v, now) {
+  if (v !== versus || online?.here) return;
+  versus.close('');
+  versus = null;
+  if (++joinTries >= JOIN_TRIES) endOnline('Couldn\'t reach your friend\'s game. Ask them to pick "A friend" again and send you the new link.');
+  else joinAt = now + JOIN_RETRY;
+}
+
+// a friend's laptop calling in. one at a time, and only while this laptop is inviting
+link.onFriend = conn => {
+  if (mode !== 'invite' || online?.here) {
+    conn.on('open', () => { conn.send({ k: 'busy' }); setTimeout(() => conn.close(), 1000); });
+    return;
+  }
+  versus?.close('');
+  versus = new Versus({ host: true });
+  versus.use(conn);
+};
+link.onError = e => {
+  if (e.type === 'peer-unavailable' && online && !online.host && versus && !versus.open) joinFailed(versus, performance.now() / 1000);
+};
+addEventListener('tt:me', e => {
+  myName = e.detail.name || '';
+  if (versus?.open) versus.send({ k: 'hello', v: PROTOCOL, name: myName });
+});
+
+// once a frame: joins, hears what the friend's laptop says, and tells it how far along this end is
+function friendTick(now) {
+  if (!online.host && !versus && link.peer?.open && now >= joinAt) join(now);
+  if (!online.host && versus && !versus.open && now - online.since > JOIN_WAIT) joinFailed(versus, now);
+  for (const d of versus ? versus.takeEvents() : []) {
+    const o = online;
+    if (!o) return;
+    if (d.k === 'open') {
+      o.here = true;
+      o.told = '';
+      versus.send({ k: 'hello', v: PROTOCOL, name: myName });
+    } else if (d.k === 'hello') {
+      if (d.v !== PROTOCOL) { endOnline('You and your friend have different versions of FlickPong. Both reload the page, then try again.'); return; }
+      o.name = String(d.name || '').trim().slice(0, 24);
+    } else if (d.k === 'status' && o.host) o.status = String(d.s);
+    else if (d.k === 'setup' && !o.host && (mode === 'lobby' || mode === 'over') && [1, 3, 5].includes(d.bestOf)) {
+      bestOf = d.bestOf;
+      levelId = FRIEND_LEVEL;
+      firstServer = d.first === 'me' ? FAR : NEAR;
+      coinToss();
+    } else if (d.k === 'hold') {
+      o.holds = !!d.on;
+      if (o.holds && (mode === 'play' || mode === 'countdown')) friendHeld();
+    } else if (d.k === 'again') o.wants = true;
+    else if (d.k === 'leave') { endOnline(`${foe()} left the match`); return; }
+    else if (d.k === 'busy') { endOnline('Your friend\'s game isn\'t inviting anyone right now. Ask them to pick "A friend" and send you the link.'); return; }
+    else if (d.k === 'gone') {
+      // a call that never got through is tried again. one that worked and then dropped ends the match
+      if (o.here) { endOnline(`Lost the connection to ${foeIn()}`); return; }
+      if (o.host) versus = null;
+      else joinFailed(versus, now);
+    }
+  }
+  if (!online || !versus?.open) return;
+  // their laptop going quiet in the middle of a match stops it until it's heard from again
+  const quiet = mode !== 'over' && performance.now() / 1000 - versus.heard > SILENT, was = online.quiet;
+  online.quiet = quiet;
+  if (quiet && !was && (mode === 'play' || mode === 'countdown')) friendHeld();
+  if (!online.host) {
+    const status = mode === 'lobby' ? 'ready' : mode === 'coach' ? 'warming' : 'pairing';
+    if (status !== online.told) { online.told = status; versus.send({ k: 'status', s: status }); }
+  }
+}
+
+// playing a friend, the match stops for both whenever either one's phone drops out
+function hold(on) {
+  if (!online || !!online.held === on) return;
+  online.held = on;
+  versus?.send({ k: 'hold', on });
+}
+
+function friendHeld() {
+  resume = 'play';
+  mode = 'paused';
+  timer = BACK_AFTER;
+  hud.say(online.quiet ? `Waiting for ${foeIn()}\'s connection` : `${foe()}\'s phone dropped out`, 'The match carries on as soon as it\'s back.');
+}
 
 function lostPhone(now) {
   if (now - link.seen <= LOST_AFTER) return false;
@@ -209,6 +398,7 @@ function pause() {
   resume = mode;
   mode = 'paused';
   timer = 0;
+  hold(true);
   hud.say('Paused', 'Move your phone and the game carries on. If it went to sleep, open it again.', 'show');
 }
 
@@ -224,10 +414,10 @@ function prompts() {
 function explain(e) {
   const r = e.reason;
   if (e.winner === NEAR) {
-    if (r === 'Out' || r === 'Ball was going out') return 'Your point. Opponent hit it out';
-    if (r === 'Ball did not cross the net') return 'Your point. Opponent hit the net';
-    if (r.startsWith('Serve')) return 'Your point. Opponent missed the serve';
-    return 'Your point. Opponent couldn\'t reach it';
+    if (r === 'Out' || r === 'Ball was going out') return `Your point. ${foe()} hit it out`;
+    if (r === 'Ball did not cross the net') return `Your point. ${foe()} hit the net`;
+    if (r.startsWith('Serve')) return `Your point. ${foe()} missed the serve`;
+    return `Your point. ${foe()} couldn't reach it`;
   }
   if (r === 'Out') return 'Went long. Try a softer flick';
   if (r === 'Ball did not cross the net') return 'Into the net. Flick slightly upward';
@@ -256,15 +446,16 @@ function handle(e) {
     hud.board(game);
   }
   if (e.type === 'serve' && mode === 'play') hud.board(game);
-  if (e.type === 'game') hud.say(`Game ${e.last[0] > e.last[1] ? 'to you' : 'to opponent'}, ${e.last[0]}-${e.last[1]}`, 'Next game coming up');
+  if (e.type === 'game') hud.say(`Game ${e.last[0] > e.last[1] ? 'to you' : `to ${foeIn()}`}, ${e.last[0]}-${e.last[1]}`, 'Next game coming up');
   if (e.type === 'over') {
     const m = game.match, st = game.stats;
     mode = 'over';
-    // the sign-in corner adds it to the player's record, or keeps it until they sign in
-    dispatchEvent(new CustomEvent('tt:match', { detail: { level: LEVELS[levelId].name, won: e.winner === NEAR, pointsWon: st.won, pointsLost: st.lost, longest: st.longest, fastest: st.fastest } }));
-    hud.say(e.winner === NEAR ? 'You win the match!' : 'Opponent wins the match',
+    // the sign-in corner adds it to the player's record, or keeps it until they sign in. a friend's match isn't recorded
+    if (!online) dispatchEvent(new CustomEvent('tt:match', { detail: { level: LEVELS[levelId].name, won: e.winner === NEAR, pointsWon: st.won, pointsLost: st.lost, longest: st.longest, fastest: st.fastest } }));
+    hud.say(e.winner === NEAR ? 'You win the match!' : `${foe()} wins the match`,
       `Games ${m.games[0]}-${m.games[1]} (${m.history.map(g => g.join('-')).join(', ')}). Longest rally ${st.longest} shots, fastest shot ${st.fastest.toFixed(1)} m/s.`);
-    hud.choices([{ n: 1, label: 'Rematch', note: 'Same settings' }, { n: 2, label: 'Change', note: 'Level and length' }]);
+    hud.choices(online ? [{ n: 1, label: 'Rematch', note: 'Same length' }, { n: 2, label: 'Leave', note: 'Back to the menu' }]
+      : [{ n: 1, label: 'Rematch', note: 'Same settings' }, { n: 2, label: 'Change', note: 'Level and length' }]);
   }
 }
 
@@ -276,10 +467,16 @@ function frame(ms) {
   tapped = link.takeTap();
   const state = link.read(now), s = state && state.age < GRACE ? state : null, live = mode === 'play' || mode === 'coach';
   const pose = paddle.tick(real, now, live ? game.assist : null, state);
+  if (online) friendTick(now);
   FLOW[mode]?.(real, s, now, pose);
   const t0 = performance.now();
+  // the friend's laptop gets this paddle and every hit and call on the same clock its pings are answered on
+  versus?.tick(performance.now() / 1000, mode === 'play' ? pose : null, real);
   if (live) game.update(dt, pose);
-  for (const e of game.drain()) handle(e);
+  for (const e of game.drain()) {
+    versus?.onEvent(e, performance.now() / 1000);
+    handle(e);
+  }
   hud.tick(real);
   const t1 = performance.now();
   view.render(game, pose, dt);
@@ -291,7 +488,9 @@ function frame(ms) {
   $('leaders').hidden = !document.body.classList.contains('ranked') || !['level', 'format', 'over'].includes(mode);
   // the network's share plus the little the playback buffer adds to keep the paddle smooth
   const total = link.lag === null ? null : link.lag + link.delay * 1000;
-  const lag = total === null ? '' : `Phone ${Math.round(total)} ms${link.route ? ` · ${link.route}` : ''}`;
+  // playing a friend, how long a hit takes to reach their laptop
+  const far = versus?.open && versus.rtt !== null ? ` · Friend ${Math.round(versus.rtt * 500)} ms` : '';
+  const lag = total === null ? '' : `Phone ${Math.round(total)} ms${link.route ? ` · ${link.route}` : ''}${far}`;
   if ($('lag').textContent !== lag) $('lag').textContent = lag;
   $('lag').classList.toggle('slow', total > 45 || link.route === 'relayed');
   link.menu(phoneMenu());
@@ -318,7 +517,7 @@ function pairing() {
   if (st === 'paired') hud.say('Phone connected', 'Tap Start on your phone, holding it like a remote pointed at this screen.', 'show');
   else if (st === 'offline') hud.say('Can\'t reach the pairing service', 'Check your internet connection. It keeps trying.');
   else if (st === 'unsupported') hud.say('This browser can\'t pair a phone', 'Try Chrome, Safari or Firefox.');
-  else if (st === 'waiting') hud.say('Scan with your phone', 'Open your phone\'s camera, point it at the code and open the link.');
+  else if (st === 'waiting') hud.say('Scan with your phone', `${invited()}Open your phone's camera, point it at the code and open the link.`);
   else hud.say('Getting a pairing code', 'One moment.');
   // browsers keep a page silent until it's clicked, and the phone does everything else
   hud.hint(sound.ctx?.state === 'running' ? '' : 'Click anywhere on this screen to turn the sound on');
@@ -328,10 +527,18 @@ function pairing() {
   }
 }
 
+// opened from a friend's invite, the pairing screen says so
+function invited() {
+  if (!online || online.host) return '';
+  return online.here ? `${foe()} invited you to a match. ` : 'You\'re joining a friend\'s match. ';
+}
+
 function phoneMenu() {
   const items = hud.list.map(({ n, label, note }) => ({ n, label, note }));
   if (mode === 'level') items.push({ n: 0, label: 'Replay the warm-up', note: '' });
   if (mode === 'coach') items.push({ n: 0, label: 'Skip the warm-up', note: '' });
+  if (mode === 'invite') items.push({ n: 0, label: 'Back', note: '' });
+  if (mode === 'lobby') items.push({ n: 0, label: 'Leave', note: '' });
   const playing = mode === 'play' || mode === 'countdown';
   return { title: hud.text.title || (playing ? 'Playing' : ''), sub: hud.text.sub, items };
 }
@@ -341,6 +548,24 @@ function openGate(open) {
   document.body.classList.toggle('gated', gated);
 }
 addEventListener('tt:gate', e => openGate(e.detail.open));
+
+// the invite link goes to the friend by whatever they use to talk: copied, or through the computer's own share sheet
+$('inviteCopy').addEventListener('click', async () => {
+  const b = $('inviteCopy');
+  try {
+    await navigator.clipboard.writeText($('inviteLink').value);
+    b.textContent = 'Copied';
+  } catch (e) {
+    $('inviteLink').select();
+    b.textContent = 'Selected, copy it';
+  }
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => { b.textContent = 'Copy link'; }, 2200);
+});
+$('inviteShare').addEventListener('click', () => {
+  navigator.share?.({ title: 'FlickPong', text: 'Play me at table tennis. Open this on your laptop, then pair your phone as the paddle.', url: $('inviteLink').value }).catch(() => {});
+});
+$('inviteLink').addEventListener('focus', e => e.target.select());
 
 // the game is played on a big screen with the phone as the paddle. opened on a phone itself, it says so first.
 // tablets have a screen at least 600 wide either way round, so they go straight in

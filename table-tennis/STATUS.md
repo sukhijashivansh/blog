@@ -5,9 +5,10 @@ Live at **https://flickpong.vercel.app** (the old table-tennis-six-xi.vercel.app
 ## Checking it yourself
 
 - **Play:** open the link on your laptop, scan the QR code with your phone, tap Start, and hold the phone like a remote.
-- **Tests:** run `npm test` in this folder. It runs 48 checks in about 10 seconds and needs nothing installed.
+- **Play a friend:** pick "A friend" on your phone, then send the invite link the game shows. Your friend opens it on their own laptop and scans its code with their own phone.
+- **Tests:** run `npm test` in this folder. It runs 56 checks in about 10 seconds and needs nothing installed.
 - **Database rules:** run `npm install` once, then `npm run test:rules`. It runs 16 checks against Firebase's own rules engine in a local emulator, needs Java, and never touches the real database.
-- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game (38 checks).
+- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game, then plays an online match between two laptops with two phones (54 checks).
 - **Local run with lag numbers:** `npm run dev`, then open http://localhost:8790. **D** shows the lag panel and **P** switches lag compensation (off, half, full).
 
 ## What's been checked
@@ -63,6 +64,45 @@ Share of points won, from 8 simulated games per cell:
 
 Rallies average 4–24 strokes, getting longer with skill. The opponent gets slightly likelier to slip the longer a rally goes.
 
+### The look
+- **A daylit studio** instead of the dark room, lit like a product shot. A pale maple floor fades into cool white air, so the warmth comes from the wood alone. Daylight falls softly from the front left, and the wood, rubber and metal pick up soft studio reflections. The air was first a warm cream; it was changed to neutral white because cream read as a generic default rather than the Apple-like look asked for.
+- **Real wood, drawn in code.** The table is tournament blue on a walnut apron with oak legs. Each paddle has a layered wooden blade, a red and a black rubber sheet, and a flared ash handle with a walnut strip. There's nothing extra to download, so it loads as fast as before.
+- **Your paddle is solid now.** Where it covers the ball, a soft outline of the ball shows through it, and only through it. A ball dropping behind the table stays hidden. This was checked pixel by pixel in staged scenes.
+- **The rubber stays red when you tilt it towards the light.** A glossier first version washed out pink mid-swing. That's fixed.
+- **The aim rings** are a deeper blue and green, edged in white, so they read on the blue table and on the pale floor.
+- **Every panel kept its dark backing,** so text stays readable on the bright scene. This was checked on a laptop, and on a tablet in landscape and portrait.
+- **It still runs at a steady 60 fps.** The median frame is 16.7 ms, with 0 long frames over a full match in the browser test.
+- **Nothing about play changed.** All 48 game checks and 38 browser checks passed at the time.
+
+### Playing a friend online
+- **How it works:** pick "A friend" and the game shows an invite link to copy or share. Your friend opens it on their own laptop or tablet and pairs their own phone. If it's their first time, they get the warm-up while you wait. Once they're ready, you pick how long to play.
+- **Neither player feels the internet in their own hits.** Each laptop runs the match and judges everything on its own half of the table, including its own player's hits. The laptops swap only each hit, toss and call, and where each paddle is. Each player sees their own end nearest them.
+- **The ball waits at your friend's paddle** for their hit to arrive over the internet, then catches up by running slightly fast. In simulation the wait was about one trip across the internet:
+
+  | Delay between laptops | Typical wait | Longest wait | Their hit lands within (9 times in 10) |
+  |---|---|---|---|
+  | 20 ms (same city) | 25 ms | 0.08 s | 2.5 cm of the waiting ball |
+  | 60 ms (same country) | 54 ms | 0.14 s | 2.7 cm |
+  | 120 ms (other side of the world) | 108 ms | 0.19 s | 2.5 cm |
+
+- **A ball your friend misses** carries on within 0.085 s. Their laptop says so 30 ms after the ball goes past their paddle. Real contacts land within 6 ms of the predicted moment 98% of the time.
+- **Both laptops always agree on the score.** Simulated matches ended identically on both laptops, point by point, in these cases:
+  - Delays from 15 to 120 ms.
+  - Weak and strong players.
+  - Every level.
+  - Faults the test forced on purpose: shots into the net, long, wide and short, by either player.
+- **Nothing a friend's laptop sends can break yours.** Malformed or extreme messages are ignored (tested).
+- **Pausing:** if either phone drops out, both games pause and count back in together. If a friend's laptop goes quiet for over a second the match pauses, and after 8 seconds it ends and you're back at the menu.
+- **Checked in a real browser** with two laptops and two phones over the real pairing service. Every step of this flow works:
+  1. The invite link.
+  2. The friend warming up first, with the inviter told.
+  3. The lobby.
+  4. A match with both scoreboards agreeing.
+  5. A third laptop with the same link being turned away.
+  6. Both games pausing and resuming.
+  7. The inviter going back to the menu when the friend's laptop closes.
+- **Friend matches don't change league points,** so two accounts can't farm wins. They're played at Club pace.
+
 ### Reliability (browser test, real pairing service)
 - Pairing, the warm-up, menus, a full match, pausing when the phone goes quiet, and the countdown back in all work.
 - Closing and reopening the phone page works, and the game tab can be reloaded with the phone reconnecting on its own.
@@ -95,14 +135,17 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
 2. **Then sign in once and finish a match** to confirm your record saves. Only you can sign into your Google account.
 3. **Wi-Fi.** The live session counted a freeze of 0.2–1 s about every 8 seconds, and those show as the paddle pausing. Things to try: AirDrop set to "No One" and Handoff off on the Mac, both devices on 5 GHz, or the Mac on your iPhone's Personal Hotspot.
 4. **Turn off Low Power Mode on the iPhone** while playing. Its sensor dropped to 20–40 readings a second at times.
-5. **Commit to git, if you want to.** The `table-tennis/` folder isn't committed.
-6. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
+5. **Commit and push the new look and online play, if you want them on shivanshsukhija.com/table-tennis/ too.** flickpong.vercel.app already has both, but the copy on your main site still shows the dark room and has no online play. Nothing has been committed yet.
+6. **Play a real friend at another place.** Simulation and the browser test can't stand in for two real people on two home connections.
+7. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
 
 ### Known limits
 - **Wi-Fi freezes over about 0.2 s** can't be hidden by any buffer.
 - **Speed Insights** needs Vercel Pro (Vercel refused it on your plan). Web Analytics covers traffic.
 - **iPhone vibration on hits** uses a Safari workaround that only works on iOS 18. It hasn't been verified on a real iPhone.
 - **The sign-in database is in the US (`nam5`).** It's written once per match, so play isn't affected.
+- **Online, if the two laptops can't connect directly** (some office or mobile networks block it), PeerJS relays them through its servers in Europe or the US, which adds delay. The corner badge shows the delay to your friend.
+- **Online, a laptop that reloads mid-match ends the match.** Picking "A friend" again starts a new one with the same link.
 
 ### Could do next (not started)
 - A "your record" screen showing wins per level.

@@ -12,10 +12,11 @@
 </head>
 <body>
 <canvas id="scene"></canvas>
+<div id="light" aria-hidden="true"></div>
 
 <div id="board" hidden>
   <div class="row"><span class="dot" id="sYou"></span><span class="name">You</span><span class="games" id="gYou">0</span><span class="pts" id="pYou">0</span></div>
-  <div class="row"><span class="dot" id="sCpu" hidden></span><span class="name">Opponent</span><span class="games" id="gCpu">0</span><span class="pts" id="pCpu">0</span></div>
+  <div class="row"><span class="dot" id="sCpu" hidden></span><span class="name" id="foeName">Opponent</span><span class="games" id="gCpu">0</span><span class="pts" id="pCpu">0</span></div>
   <div id="info"></div>
 </div>
 
@@ -69,6 +70,16 @@
 <div id="pair" hidden>
   <div id="qr"></div>
   <p id="link"></p>
+</div>
+
+<div id="invite" hidden>
+  <label for="inviteLink">Invite link</label>
+  <input id="inviteLink" type="text" readonly spellcheck="false" autocomplete="off">
+  <div class="buttons">
+    <button id="inviteCopy" type="button">Copy link</button>
+    <button id="inviteShare" class="quiet" type="button" hidden>Share</button>
+  </div>
+  <p>Matches against a friend are played at Club pace and don't change league points.</p>
 </div>
 
 <pre id="debug" hidden></pre>
