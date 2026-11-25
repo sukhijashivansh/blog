@@ -1,0 +1,11 @@
+test
+e2e
+dev
+package.json
+package-lock.json
+node_modules
+firebase.json
+.firebaserc
+firestore.rules
+STATUS.md
+*-debug.log

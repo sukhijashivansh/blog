@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- outside connections: the phone pairing service (after that the phone talks to this tab directly), and google sign-in
+     with the firebase database that keeps a signed-in player's record -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/ https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googleapis.com; frame-src https://flickpong-game.firebaseapp.com https://accounts.google.com">
+<title>Table Tennis</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='10' fill='%23d8232f'/%3E%3Crect x='17.5' y='19' width='5' height='12' rx='2' transform='rotate(-45 20 25)' fill='%23c9a06b'/%3E%3Ccircle cx='26' cy='6' r='3.5' fill='%23ff8a1f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="board" hidden>
+  <div class="row"><span class="dot" id="sYou"></span><span class="name">You</span><span class="games" id="gYou">0</span><span class="pts" id="pYou">0</span></div>
+  <div class="row"><span class="dot" id="sCpu" hidden></span><span class="name">Opponent</span><span class="games" id="gCpu">0</span><span class="pts" id="pCpu">0</span></div>
+  <div id="info"></div>
+</div>
+
+<div id="prompt" role="status" aria-live="polite">
+  <div id="demo" aria-hidden="true"></div>
+  <h1 id="title">Table Tennis</h1>
+  <p id="sub">Getting a pairing code</p>
+  <div id="choices" hidden></div>
+  <div id="pips" hidden></div>
+  <div id="meter" hidden><div id="fill"></div></div>
+  <p id="hint" hidden></p>
+</div>
+
+<div id="call" hidden></div>
+
+<div id="account" hidden>
+  <div id="me" hidden>
+    <span id="mePic" hidden></span>
+    <div><b id="meName"></b><small id="meRecord"></small></div>
+    <button id="signOut" type="button">Sign out</button>
+  </div>
+  <p id="accountNote" role="status" hidden></p>
+</div>
+
+<div id="gate" hidden>
+  <h1>Sign in to play</h1>
+  <p>Every match you win earns league points: 1 for a Beginner win, 3 for Club and 6 for Pro. Your Google name and photo show on the leaderboard.</p>
+  <button id="gateSignIn" class="google" type="button"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Sign in with Google</span></button>
+  <p id="gateNote" role="status" hidden></p>
+  <h2>Top players</h2>
+  <ol id="gateLeaders" class="leaders"></ol>
+</div>
+
+<aside id="leaders" hidden>
+  <h2>Leaderboard</h2>
+  <ol id="leadersList" class="leaders"></ol>
+  <p id="myRank"></p>
+</aside>
+
+<div id="small" hidden>
+  <svg viewBox="0 0 96 64" aria-hidden="true"><rect x="4" y="6" width="58" height="38" rx="4"/><rect class="glass" x="9" y="11" width="48" height="28" rx="1"/><rect x="0" y="46" width="66" height="5" rx="2.5"/><rect x="72" y="18" width="20" height="38" rx="4"/><rect class="glass" x="75" y="23" width="14" height="26" rx="1"/></svg>
+  <h1>Play on a bigger screen</h1>
+  <p>FlickPong plays on a laptop or tablet, and your phone becomes the paddle. Open <b>flickpong.vercel.app</b> there, then scan its code with this phone.</p>
+  <button id="smallShare" type="button">Send the link to my computer</button>
+  <button id="smallAnyway" class="quiet" type="button">Play here anyway</button>
+  <p id="smallNote" role="status" hidden></p>
+</div>
+
+<span id="lag"></span>
+
+<div id="pair" hidden>
+  <div id="qr"></div>
+  <p id="link"></p>
+</div>
+
+<pre id="debug" hidden></pre>
+
+<script src="js/visits.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+.vercel
+# the database emulator writes these while the rules tests run
+*-debug.log

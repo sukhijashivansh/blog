@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function won(d, level) { return d.levels.get(level, {}).get('won', 0); }
+    // league points: a Beginner win is worth 1, Club 3, Pro 6. kept in step with the wins, so the leaderboard can sort on it
+    function points(d) { return won(d, 'Beginner') + 3 * won(d, 'Club') + 6 * won(d, 'Pro'); }
+
+    // a player's record: totals, bests, wins per level and league points. the shape is checked, and nothing ever counts down
+    function validRecord(d) {
+      return d.keys().hasOnly(['name', 'photo', 'played', 'won', 'pointsWon', 'pointsLost', 'bestRally', 'fastest', 'levels', 'score', 'joinedAt', 'lastSeen'])
+        && d.name is string && d.name.size() <= 80 && d.photo is string && d.photo.size() <= 500
+        && d.played is int && d.played >= 0 && d.played < 1000000 && d.won is int && d.won >= 0 && d.won <= d.played
+        && d.pointsWon is int && d.pointsWon >= 0 && d.pointsLost is int && d.pointsLost >= 0
+        && d.bestRally is int && d.bestRally >= 0 && d.bestRally < 10000
+        && d.fastest is number && d.fastest >= 0 && d.fastest < 100
+        && d.levels is map && d.levels.keys().hasOnly(['Beginner', 'Club', 'Pro'])
+        && d.score is int && d.score == points(d);
+    }
+
+    match /players/{uid} {
+      // the leaderboard is public. a record holds a name, a photo and game stats, never an email. lists come 50 at most
+      allow get: if true;
+      allow list: if request.query.limit <= 50;
+      // only the player writes their own record, at most 50 matches at a time (the most that can wait on one computer)
+      allow create: if request.auth != null && request.auth.uid == uid && validRecord(request.resource.data)
+        && request.resource.data.joinedAt == request.time && request.resource.data.played <= 50;
+      allow update: if request.auth != null && request.auth.uid == uid && validRecord(request.resource.data)
+        && request.resource.data.played >= resource.data.played && request.resource.data.played <= resource.data.played + 50
+        && request.resource.data.won >= resource.data.won && request.resource.data.score >= resource.data.score
+        && request.resource.data.pointsWon >= resource.data.pointsWon && request.resource.data.pointsLost >= resource.data.pointsLost
+        && request.resource.data.bestRally >= resource.data.bestRally && request.resource.data.fastest >= resource.data.fastest
+        && request.resource.data.joinedAt == resource.data.joinedAt;
+    }
+  }
+}
