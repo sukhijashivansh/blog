@@ -1,6 +1,6 @@
 # FlickPong status
 
-Live at **https://flickpong.vercel.app** (the old table-tennis-six-xi.vercel.app link still works). Last updated 25 Nov 2026.
+Live at **https://flickpong.vercel.app**, and on your site at https://www.shivanshsukhija.com/table-tennis/ (the old table-tennis-six-xi.vercel.app link still works). Last updated 25 Nov 2026.
 
 ## Checking it yourself
 
@@ -135,9 +135,8 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
 2. **Then sign in once and finish a match** to confirm your record saves. Only you can sign into your Google account.
 3. **Wi-Fi.** The live session counted a freeze of 0.2–1 s about every 8 seconds, and those show as the paddle pausing. Things to try: AirDrop set to "No One" and Handoff off on the Mac, both devices on 5 GHz, or the Mac on your iPhone's Personal Hotspot.
 4. **Turn off Low Power Mode on the iPhone** while playing. Its sensor dropped to 20–40 readings a second at times.
-5. **Commit and push the new look and online play, if you want them on shivanshsukhija.com/table-tennis/ too.** flickpong.vercel.app already has both, but the copy on your main site still shows the dark room and has no online play. Nothing has been committed yet.
-6. **Play a real friend at another place.** Simulation and the browser test can't stand in for two real people on two home connections.
-7. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
+5. **Play a real friend at another place.** Simulation and the browser test can't stand in for two real people on two home connections.
+6. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
 
 ### Known limits
 - **Wi-Fi freezes over about 0.2 s** can't be hidden by any buffer.
