@@ -51,17 +51,19 @@ export class PhoneLink {
 
   get paired() { return !!this.conn?.open; }
 
-  async start() {
+  // the same id across reloads, so a phone that's already paired finds the game again by itself. a laptop joining a friend's
+  // game takes a fresh one and doesn't keep it, since the same browser may hold the inviter's tab, which uses the saved one
+  async start({ fresh = false } = {}) {
     await loadScript(new URL('../vendor/peerjs.min.js', import.meta.url).href);
-    // the same id across reloads, so a phone that's already paired finds the game again by itself
-    this.open(store.get('tt.peer') || makeId());
+    this.keep = !fresh;
+    this.open((!fresh && store.get('tt.peer')) || makeId());
   }
 
   open(id) {
     const peer = this.peer = new window.peerjs.Peer(id, { debug: 0 });
     peer.on('open', got => {
       this.tries = 0;
-      store.set('tt.peer', got);
+      if (this.keep) store.set('tt.peer', got);
       this.url = new URL(`phone.html#${got}`, isLocal() ? LIVE : location.href).href;
       if (!this.paired) this.state = 'waiting';
     });

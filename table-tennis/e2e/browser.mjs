@@ -225,7 +225,7 @@ watch(lapB, 'friend\'s game');
 await lapB.goto(invite);
 await lapB.mouse.click(640, 400);
 check('the friend\'s laptop says they were invited', !!await until(async () => (await lapB.textContent('#sub')).includes('invited you to a match'), 30000), await lapB.textContent('#sub'));
-check('the inviter sees their friend arrive', !!await until(async () => (await lap.textContent('#hint')).includes('pairing their phone'), 10000), await lap.textContent('#hint'));
+check('the inviter sees their friend arrive', !!await until(async () => (await lap.textContent('#inviteStatus')).includes('pairing their phone'), 10000), await lap.textContent('#inviteStatus'));
 const linkB = await until(async () => { const t = await lapB.textContent('#link'); return t.startsWith('http') ? t : null; }, 30000);
 const phoneB = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })).newPage();
 watch(phoneB, 'friend\'s phone');
@@ -233,7 +233,7 @@ await phoneB.goto(new URL(new URL(linkB).pathname + new URL(linkB).hash, base).h
 await until(() => phoneB.isEnabled('#go'), 30000);
 await phoneB.evaluate(SENSORS);
 await phoneB.click('#go');
-check('a first-time friend warms up, and the inviter is told', !!await until(async () => (await lap.textContent('#hint')).includes('warming up'), 10000), await lap.textContent('#hint'));
+check('a first-time friend warms up, and the inviter is told', !!await until(async () => (await lap.textContent('#inviteStatus')).includes('warming up'), 10000), await lap.textContent('#inviteStatus'));
 await until(() => phoneB.isVisible('#menu button:has-text("Skip")'), 4000);
 await phoneB.click('#menu button:has-text("Skip")');
 check('then the friend waits for the inviter', !!await until(async () => (await lapB.textContent('#title')) === 'Waiting for your friend', 6000), await lapB.textContent('#title'));
@@ -244,7 +244,7 @@ check('the match starts on both laptops', !!await until(async () => await lap.is
 check('each scoreboard names the other player', (await lap.textContent('#foeName')) === 'Friend' && (await lapB.textContent('#foeName')) === 'Friend');
 const stopA = player(lap, phone), stopB = player(lapB, phoneB);
 await sleep(30000);
-const agreed = await until(async () => { const [a, b] = [await scoreOf(lap), await scoreOf(lapB)]; return a[0] + a[1] > 0 && a[0] === b[1] && a[1] === b[0] ? a : null; }, 10000);
+const agreed = await until(async () => { const [a, b] = [await scoreOf(lap), await scoreOf(lapB)]; return a[0] + a[1] > 0 && a[0] === b[1] && a[1] === b[0] ? a : null; }, 40000);
 check('both laptops show the same score', !!agreed, `inviter ${(await scoreOf(lap)).join('-')}, friend ${(await scoreOf(lapB)).join('-')}`);
 await stopA();
 await stopB();
@@ -270,6 +270,18 @@ await lapB.context().close();
 await phoneB.context().close();
 check('when the friend\'s laptop closes, the inviter goes back to the menu', !!await until(async () => (await lap.textContent('#title')) === 'Pick your opponent', 20000), await lap.textContent('#title'));
 check('and the board goes back to the computer', (await lap.textContent('#foeName')) === 'Opponent' && !(await lap.isVisible('#board')));
+
+// the start screen offers a friend match too, so the invite can go out before a phone is paired
+const fresh = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+watch(fresh, 'new game');
+await fresh.goto(base);
+check('the start screen offers to play a friend', !!await until(() => fresh.isVisible('#friendStart'), 30000));
+await fresh.click('#friendStart');
+check('which shows the invite link beside the phone code', !!await until(async () => await fresh.isVisible('#invite') && await fresh.isVisible('#pair') && (await fresh.inputValue('#inviteLink')).includes('#join=tt-') && (await fresh.textContent('#inviteStatus')).startsWith('Waiting for your friend'), 4000));
+await fresh.screenshot({ path: path.join(OUT, 'e2e-start-friend.png') });
+await fresh.click('#inviteCancel');
+check('and can be put away again', !!await until(async () => !(await fresh.isVisible('#invite')) && await fresh.isVisible('#friendStart'), 4000));
+await fresh.context().close();
 
 // once google sign-in is switched on, the game waits behind the sign-in card. firebase's answer is stood in for here
 const gatedPage = await lapCtx.newPage();

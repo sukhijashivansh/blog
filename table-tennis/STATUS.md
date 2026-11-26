@@ -5,10 +5,11 @@ Live at **https://flickpong.vercel.app**, and on your site at https://www.shivan
 ## Checking it yourself
 
 - **Play:** open the link on your laptop, scan the QR code with your phone, tap Start, and hold the phone like a remote.
-- **Play a friend:** pick "A friend" on your phone, then send the invite link the game shows. Your friend opens it on their own laptop and scans its code with their own phone.
+- **Play a friend:** click **Play a friend online** under the QR code (or pick "A friend" on your phone later), then send the invite link the game shows. Your friend opens it on their own laptop and scans its code with their own phone.
 - **Tests:** run `npm test` in this folder. It runs 56 checks in about 10 seconds and needs nothing installed.
 - **Database rules:** run `npm install` once, then `npm run test:rules`. It runs 16 checks against Firebase's own rules engine in a local emulator, needs Java, and never touches the real database.
-- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game, then plays an online match between two laptops with two phones (54 checks).
+- **Online test:** `npm run e2e:online` plays friends through the relay and checks its rules, against a local copy of the database. It needs Java, like the rules test.
+- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game, then plays an online match between two laptops with two phones (57 checks).
 - **Local run with lag numbers:** `npm run dev`, then open http://localhost:8790. **D** shows the lag panel and **P** switches lag compensation (off, half, full).
 
 ## What's been checked
@@ -75,7 +76,7 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
 - **Nothing about play changed.** All 48 game checks and 38 browser checks passed at the time.
 
 ### Playing a friend online
-- **How it works:** pick "A friend" and the game shows an invite link to copy or share. Your friend opens it on their own laptop or tablet and pairs their own phone. If it's their first time, they get the warm-up while you wait. Once they're ready, you pick how long to play.
+- **How it works:** click **Play a friend online** on the first screen, or pick "A friend" from the menu once your phone is paired, and the game shows an invite link to copy or share. Your friend opens it on their own laptop or tablet and pairs their own phone. If it's their first time, they get the warm-up while you wait. Once they're ready, you pick how long to play.
 - **Neither player feels the internet in their own hits.** Each laptop runs the match and judges everything on its own half of the table, including its own player's hits. The laptops swap only each hit, toss and call, and where each paddle is. Each player sees their own end nearest them.
 - **The ball waits at your friend's paddle** for their hit to arrive over the internet, then catches up by running slightly fast. In simulation the wait was about one trip across the internet:
 
@@ -102,6 +103,15 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
   6. Both games pausing and resuming.
   7. The inviter going back to the menu when the friend's laptop closes.
 - **Friend matches don't change league points,** so two accounts can't farm wins. They're played at Club pace.
+- **When two laptops can't link directly, the match goes through a relay.** Some home, mobile and office networks block a direct link. The relay is the game's own Firebase realtime database, in Singapore as the nearest region to India.
+  - The friend's laptop tries a direct link for 8 seconds, then the relay for 20 more, and says what it's doing.
+  - The corner badge shows "relayed" when the relay is in use.
+  - PeerJS's own relay servers no longer exist: their addresses stopped resolving. That's why a friend could get stuck on "Connecting to your friend's game" on 25 Nov.
+- **Tested the ways people really try it** (`npm run e2e:online`, 17 checks against a local copy of the relay database):
+  - **A friend whose network blocks direct links** played a full match through the relay, with both scoreboards agreeing and both corners showing "relayed".
+  - **Two tabs in one browser** link up in 1.2 s. It was 9.7 s, because the second tab waited for the first tab's pairing id.
+  - **An invite link opened after its own game has closed** says so, instead of waiting forever.
+  - **The relay database's rules** only allow rooms named like pairing ids, with two sides each, holding short strings. Nobody can list the rooms.
 
 ### Reliability (browser test, real pairing service)
 - Pairing, the warm-up, menus, a full match, pausing when the phone goes quiet, and the countdown back in all work.
@@ -121,7 +131,10 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
   - Unknown fields and levels are refused.
   - Records hold a name, photo and stats, never an email.
 - **Not tested with a real Google account yet** (see below).
-- **Opened on a phone, the game asks for a bigger screen.** A button shares the link to your computer, and "Play here anyway" still lets you in. Tablets go straight in. The phone controller page is unaffected.
+- **Opened on a phone, the game shows a short card in the shadcn/ui style:** play on a laptop or tablet, your phone is the racket, then three steps.
+  - **"Share link"** sends the game to your computer. When the phone opened a friend's invite, it sends the invite itself.
+  - **"Play here anyway"** still lets you in.
+  - The card follows the phone's light or dark setting. Tablets go straight in, and the phone controller page is unaffected.
 
 ### Analytics
 - **Vercel Web Analytics is on,** and a real visit was confirmed recorded: https://vercel.com/shivanshsukhijas-projects/table-tennis/analytics
@@ -129,21 +142,25 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
 ## What's left
 
 ### Waiting on you
-1. **Switch on Google sign-in.** It takes about a minute, and nothing else can do it. Sign-in becomes required to play the moment this is done:
+1. **Create the relay database.** It takes a minute in the Firebase console, and until it's done, friends whose networks block a direct link can't play. They see "Couldn't reach your friend's game" after about 30 seconds.
+   1. Open https://console.firebase.google.com/project/flickpong-game/database and click **Create Database**.
+   2. Pick **Singapore (asia-southeast1)**, then **Start in locked mode**, then **Enable**.
+   3. The relay's rules, in `database.rules.json`, then go up with `firebase deploy --only database --project flickpong-game`.
+2. **Switch on Google sign-in.** It takes about a minute, and nothing else can do it. Sign-in becomes required to play the moment this is done:
    - https://console.firebase.google.com/project/flickpong-game/authentication/providers: Get started, then Google, then Enable, pick the support email, and Save.
    - https://console.firebase.google.com/project/flickpong-game/authentication/settings: under Authorized domains, add `flickpong.vercel.app`.
-2. **Then sign in once and finish a match** to confirm your record saves. Only you can sign into your Google account.
-3. **Wi-Fi.** The live session counted a freeze of 0.2–1 s about every 8 seconds, and those show as the paddle pausing. Things to try: AirDrop set to "No One" and Handoff off on the Mac, both devices on 5 GHz, or the Mac on your iPhone's Personal Hotspot.
-4. **Turn off Low Power Mode on the iPhone** while playing. Its sensor dropped to 20–40 readings a second at times.
-5. **Play a real friend at another place.** Simulation and the browser test can't stand in for two real people on two home connections.
-6. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
+3. **Then sign in once and finish a match** to confirm your record saves. Only you can sign into your Google account.
+4. **Wi-Fi.** The live session counted a freeze of 0.2–1 s about every 8 seconds, and those show as the paddle pausing. Things to try: AirDrop set to "No One" and Handoff off on the Mac, both devices on 5 GHz, or the Mac on your iPhone's Personal Hotspot.
+5. **Turn off Low Power Mode on the iPhone** while playing. Its sensor dropped to 20–40 readings a second at times.
+6. **Play a real friend at another place.** Simulation and the browser test can't stand in for two real people on two home connections.
+7. **An old file server is still running on port 8765.** It's Python, process 92341, started on 23 Nov by an earlier session. Stop it if you don't need it: `kill 92341`.
 
 ### Known limits
 - **Wi-Fi freezes over about 0.2 s** can't be hidden by any buffer.
 - **Speed Insights** needs Vercel Pro (Vercel refused it on your plan). Web Analytics covers traffic.
 - **iPhone vibration on hits** uses a Safari workaround that only works on iOS 18. It hasn't been verified on a real iPhone.
 - **The sign-in database is in the US (`nam5`).** It's written once per match, so play isn't affected.
-- **Online, if the two laptops can't connect directly** (some office or mobile networks block it), PeerJS relays them through its servers in Europe or the US, which adds delay. The corner badge shows the delay to your friend.
+- **Online through the relay, every message goes by way of Singapore,** which adds delay compared with a direct link. From India that's roughly 50–100 ms each way, which the game is built to absorb. The corner badge shows the delay to your friend.
 - **Online, a laptop that reloads mid-match ends the match.** Picking "A friend" again starts a new one with the same link.
 
 ### Could do next (not started)

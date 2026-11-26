@@ -25,15 +25,18 @@ const GATE_WAIT = 12000;
 let lesson = 0, lessonDone = 0, nextIn = 0, sides = { l: false, r: false };
 
 // playing a friend online, each at their own laptop with their own phone. the invite link carries this laptop's pairing id, and
-// the friend's laptop connects to it. online is { host, name, here, status, held, holds, quiet, want, wants } while that's on:
-// host is whether this laptop sent the invite, here whether the friend's laptop is connected, status how far along the friend is,
-// held and holds whether this end or theirs has stopped the match for a phone that dropped out, quiet whether their laptop has
-// gone silent, and want and wants whether this end or theirs has asked for a rematch. a friend's matches are played at Club
-// pace and don't count towards league points. a friend's laptop that can't be found is tried JOIN_TRIES times, JOIN_RETRY
-// seconds apart, and one that hasn't answered in JOIN_WAIT seconds counts as not found. SILENT seconds without a word stops the match
-const PROTOCOL = 1, FRIEND_LEVEL = 2, JOIN_TRIES = 5, JOIN_RETRY = 3, JOIN_WAIT = 15, SILENT = 1.2;
+// the friend's laptop connects to it. online is { host, name, here, status, held, holds, quiet, want, wants, route, own } while
+// that's on: host is whether this laptop sent the invite, here whether the two laptops have said hello, status how far along the
+// friend is, held and holds whether this end or theirs has stopped the match for a phone that dropped out, quiet whether their
+// laptop has gone silent, want and wants whether this end or theirs has asked for a rematch, route how the invited laptop is
+// trying to reach the inviter's, and own whether the invite link was made in this same browser. a friend's matches are played
+// at Club pace and don't count towards league points. the invited laptop tries a direct link for DIRECT_WAIT seconds and then
+// the relay for RELAY_WAIT more. SILENT seconds without a word stops a match
+const PROTOCOL = 2, FRIEND_LEVEL = 2, DIRECT_WAIT = 8, RELAY_WAIT = 20, SILENT = 1.2;
 const joinId = (new URLSearchParams(location.hash.slice(1)).get('join') || '').replace(/[^\w-]/g, '').slice(0, 64);
-let versus = null, online = joinId ? { host: false } : null, myName = '', joinTries = 0, joinAt = 0, copyTimer = 0;
+// hostRelay is the inviting laptop's wait in the relay: null before it starts, 'starting', the link itself, or 'off' if the relay
+// can't be reached from here
+let versus = null, online = joinId ? { host: false, own: joinId === store.get('tt.peer') } : null, myName = '', hostRelay = null, copyTimer = 0;
 // the other player, as the screens name them
 const foe = () => (online ? online.name || 'Your friend' : 'Opponent');
 const foeIn = () => (online ? online.name || 'your friend' : 'the opponent');
@@ -140,7 +143,8 @@ function finishCoach() {
   view.setBeacons([]);
   hud.pips(0, 0);
   hud.meter(0);
-  if (online) toLobby();
+  if (online?.host) toInvite();
+  else if (online) toLobby();
   else askLevel();
 }
 
@@ -155,6 +159,7 @@ const FLOW = {
     hud.meter(0);
     document.body.classList.remove('finding');
     if (!store.get('tt.warm')) startCoach();
+    else if (online?.host) toInvite();
     else if (online) toLobby();
     else askLevel();
   },
@@ -187,18 +192,13 @@ const FLOW = {
   // the inviter waits here for their friend to open the link, pair a phone and be ready
   invite() {
     if (pick([0]) === 0) { endOnline(); return; }
-    const o = online;
-    hud.hint(!o.here ? 'Waiting for your friend to open the link' : o.status === 'warming' ? `${foe()} is here and warming up` : o.status === 'ready' ? '' : `${foe()} is here and pairing their phone`);
-    if (o.here && o.status === 'ready') {
-      $('invite').hidden = true;
-      askFormat();
-    }
+    if (online.here && online.status === 'ready') askFormat();
   },
   // the friend who was invited waits here for the inviter to pick how long to play
   lobby() {
     if (pick([0]) === 0) { endOnline(); return; }
-    if (online.here) hud.say(`Waiting for ${foeIn()}`, 'They pick how long to play. Keep your phone in hand.');
-    else hud.say('Connecting to your friend\'s game', 'One moment.');
+      if (online.here) hud.say(`Waiting for ${foeIn()}`, 'They pick how long to play. Keep your phone in hand.');
+    else hud.say('Connecting to your friend\'s game', online.route === 'relay' ? 'A direct link didn\'t work on this network, so it\'s going another way. A few more seconds.' : 'One moment.');
   },
   format(dt) {
     const got = pick([1, 2, 3]);
@@ -255,15 +255,31 @@ const FLOW = {
 };
 
 /* ---------- playing a friend online ---------- */
+// the invite can be made on the start screen, before this player's own phone is paired, or from the menu once it is
 function startInvite() {
-  mode = 'invite';
   online = { host: true };
   levelId = FRIEND_LEVEL;
-  hud.choices();
-  hud.say('Invite a friend', 'Send them this link. They open it on their laptop or tablet and pair their own phone, then you pick how long to play.');
   $('inviteLink').value = `${location.origin}${location.pathname}#join=${link.peer.id}`;
   $('inviteShare').hidden = !navigator.share;
-  $('invite').hidden = false;
+  if (mode !== 'find') toInvite();
+}
+
+function toInvite() {
+  mode = 'invite';
+  hud.choices();
+  hud.hint();
+  hud.say('Invite a friend', 'Send them this link. They open it on their laptop or tablet and pair their own phone, then you pick how long to play.');
+}
+
+// how far along the invited friend is, on the invite card
+function inviteStatus() {
+  const o = online, ready = mode === 'find' ? '. Pair your phone to start' : '';
+  const text = !o.here ? 'Waiting for your friend to open the link'
+    : o.status === 'ready' ? `${foe()} is ready${ready}`
+    : o.status === 'warming' ? `${foe()} is here and warming up`
+    : `${foe()} is here and pairing their phone`;
+  if ($('inviteStatus').textContent !== text) $('inviteStatus').textContent = text;
+  $('inviteStatus').classList.toggle('on', !!o.here);
 }
 
 function toLobby() {
@@ -279,8 +295,8 @@ function endOnline(why = '') {
   versus?.close(why ? '' : 'leave');
   versus = null;
   online = null;
-  joinTries = 0;
-  $('invite').hidden = true;
+  if (typeof hostRelay === 'object') hostRelay?.close();
+  hostRelay = null;
   $('foeName').textContent = 'Opponent';
   // a reload shouldn't join the same friend again
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
@@ -294,26 +310,64 @@ function endOnline(why = '') {
   askLevel();
 }
 
-// the invited laptop calls the inviter's, and tries again if it isn't there yet
-function join(now) {
+// the invited laptop calls the inviter's directly first, as that's quickest. if they haven't said hello within DIRECT_WAIT
+// seconds, or the inviter's pairing id can't be found, it goes through the relay instead
+function joinDirect(now) {
   const conn = link.callFriend(joinId);
   if (!conn) return;
   versus = new Versus({ host: false });
   versus.use(conn);
-  online.since = now;
+  Object.assign(online, { route: 'direct', since: now });
 }
 
-function joinFailed(v, now) {
-  if (v !== versus || online?.here) return;
-  versus.close('');
+async function joinRelay(now) {
+  if (!online || online.route === 'relay') return;
+  versus?.close('');
   versus = null;
-  if (++joinTries >= JOIN_TRIES) endOnline('Couldn\'t reach your friend\'s game. Ask them to pick "A friend" again and send you the new link.');
-  else joinAt = now + JOIN_RETRY;
+  Object.assign(online, { route: 'relay', since: now });
+  try {
+    const { RelayLink } = await import('./relay.js');
+    if (online?.route !== 'relay' || online.here) return;
+    versus = new Versus({ host: false });
+    versus.use(new RelayLink(joinId, 'guest'));
+  } catch (e) {
+    console.warn('FlickPong: the relay is unavailable', e);
+    joinFailed();
+  }
 }
 
-// a friend's laptop calling in. one at a time, and only while this laptop is inviting
+function joinFailed() {
+  endOnline(online?.own ? 'That invite link was made in this browser, and its game has closed. Send it to your friend to open on their own laptop.'
+    : 'Couldn\'t reach your friend\'s game. Make sure it\'s still open on their laptop, then open the link again.');
+}
+
+// the inviting laptop also waits in the relay, for a friend whose network won't allow a direct link. it stops once a friend
+// has said hello, and waits again if one who came through the relay leaves before that
+async function listenRelay() {
+  hostRelay = 'starting';
+  try {
+    const { RelayLink } = await import('./relay.js');
+    if (hostRelay !== 'starting') return;
+    if (!online?.host || online.here || !link.peer?.open) { hostRelay = null; return; }
+    const r = hostRelay = new RelayLink(link.peer.id, 'host');
+    r.on('open', () => {
+      if (hostRelay !== r) return;
+      hostRelay = null;
+      if (!online?.host || online.here) { r.close(); return; }
+      versus?.close('');
+      versus = new Versus({ host: true });
+      versus.use(r);
+    });
+    r.on('error', () => { if (hostRelay === r) hostRelay = 'off'; });
+  } catch (e) {
+    console.warn('FlickPong: the relay is unavailable', e);
+    hostRelay = 'off';
+  }
+}
+
+// a friend's laptop calling in directly. one at a time, and only while this laptop is inviting
 link.onFriend = conn => {
-  if (mode !== 'invite' || online?.here) {
+  if (!online?.host || online.here || versus?.open) {
     conn.on('open', () => { conn.send({ k: 'busy' }); setTimeout(() => conn.close(), 1000); });
     return;
   }
@@ -321,8 +375,9 @@ link.onFriend = conn => {
   versus = new Versus({ host: true });
   versus.use(conn);
 };
+// the inviter's pairing id isn't there. their game may have closed, or only lost the pairing service, so the relay is tried
 link.onError = e => {
-  if (e.type === 'peer-unavailable' && online && !online.host && versus && !versus.open) joinFailed(versus, performance.now() / 1000);
+  if (e.type === 'peer-unavailable' && online && !online.host && !online.here && online.route === 'direct') joinRelay(performance.now() / 1000);
 };
 addEventListener('tt:me', e => {
   myName = e.detail.name || '';
@@ -331,18 +386,28 @@ addEventListener('tt:me', e => {
 
 // once a frame: joins, hears what the friend's laptop says, and tells it how far along this end is
 function friendTick(now) {
-  if (!online.host && !versus && link.peer?.open && now >= joinAt) join(now);
-  if (!online.host && versus && !versus.open && now - online.since > JOIN_WAIT) joinFailed(versus, now);
+  const o = online;
+  if (!o.host && !o.here) {
+    if (!o.route && link.peer?.open) joinDirect(now);
+    else if (o.route === 'direct' && now - o.since > DIRECT_WAIT) joinRelay(now);
+    else if (o.route === 'relay' && now - o.since > RELAY_WAIT) { joinFailed(); return; }
+  }
+  if (o.host && !o.here && hostRelay === null && !versus?.relayed && link.peer?.open) listenRelay();
   for (const d of versus ? versus.takeEvents() : []) {
     const o = online;
     if (!o) return;
     if (d.k === 'open') {
-      o.here = true;
       o.told = '';
       versus.send({ k: 'hello', v: PROTOCOL, name: myName });
     } else if (d.k === 'hello') {
       if (d.v !== PROTOCOL) { endOnline('You and your friend have different versions of FlickPong. Both reload the page, then try again.'); return; }
       o.name = String(d.name || '').trim().slice(0, 24);
+      // answered once, in case this end's own hello was lost on the way
+      if (!d.re) versus.send({ k: 'hello', v: PROTOCOL, name: myName, re: true });
+      if (!o.here) {
+        o.here = true;
+        if (o.host && typeof hostRelay === 'object') { hostRelay?.close(); hostRelay = null; }
+      }
     } else if (d.k === 'status' && o.host) o.status = String(d.s);
     else if (d.k === 'setup' && !o.host && (mode === 'lobby' || mode === 'over') && [1, 3, 5].includes(d.bestOf)) {
       bestOf = d.bestOf;
@@ -356,12 +421,15 @@ function friendTick(now) {
     else if (d.k === 'leave') { endOnline(`${foe()} left the match`); return; }
     else if (d.k === 'busy') { endOnline('Your friend\'s game isn\'t inviting anyone right now. Ask them to pick "A friend" and send you the link.'); return; }
     else if (d.k === 'gone') {
-      // a call that never got through is tried again. one that worked and then dropped ends the match
+      // a link that worked and then dropped ends the match. one that never said hello is dropped, and the invited laptop
+      // tries the relay next, or gives up if that was it
       if (o.here) { endOnline(`Lost the connection to ${foeIn()}`); return; }
       if (o.host) versus = null;
-      else joinFailed(versus, now);
+      else if (o.route === 'direct') joinRelay(now);
+      else { joinFailed(); return; }
     }
   }
+  if (online?.host) inviteStatus();
   if (!online || !versus?.open) return;
   // their laptop going quiet in the middle of a match stops it until it's heard from again
   const quiet = mode !== 'over' && performance.now() / 1000 - versus.heard > SILENT, was = online.quiet;
@@ -484,12 +552,15 @@ function frame(ms) {
   monitor.tick(ms, link, view.ratio);
   // while paused the code stays up too, since a phone page that was closed can take a while to count as gone
   $('pair').hidden = mode === 'find' ? link.paired : mode !== 'paused';
+  // the start screen offers to play a friend, and the invite link shows from then until the friend is ready
+  $('friendStart').hidden = !(mode === 'find' && !online && link.url);
+  $('invite').hidden = !(online?.host && (mode === 'find' || mode === 'invite'));
   // the leaderboard shows between matches, once there's one to show
   $('leaders').hidden = !document.body.classList.contains('ranked') || !['level', 'format', 'over'].includes(mode);
   // the network's share plus the little the playback buffer adds to keep the paddle smooth
   const total = link.lag === null ? null : link.lag + link.delay * 1000;
   // playing a friend, how long a hit takes to reach their laptop
-  const far = versus?.open && versus.rtt !== null ? ` · Friend ${Math.round(versus.rtt * 500)} ms` : '';
+  const far = versus?.open && versus.rtt !== null ? ` · Friend ${Math.round(versus.rtt * 500)} ms${versus.relayed ? ' · relayed' : ''}` : '';
   const lag = total === null ? '' : `Phone ${Math.round(total)} ms${link.route ? ` · ${link.route}` : ''}${far}`;
   if ($('lag').textContent !== lag) $('lag').textContent = lag;
   $('lag').classList.toggle('slow', total > 45 || link.route === 'relayed');
@@ -517,7 +588,7 @@ function pairing() {
   if (st === 'paired') hud.say('Phone connected', 'Tap Start on your phone, holding it like a remote pointed at this screen.', 'show');
   else if (st === 'offline') hud.say('Can\'t reach the pairing service', 'Check your internet connection. It keeps trying.');
   else if (st === 'unsupported') hud.say('This browser can\'t pair a phone', 'Try Chrome, Safari or Firefox.');
-  else if (st === 'waiting') hud.say('Scan with your phone', `${invited()}Open your phone's camera, point it at the code and open the link.`);
+  else if (st === 'waiting') hud.say('Scan with your phone', `${invited()}Open your phone's camera, point it at the code and open the link.${online?.host ? ' Send your friend the invite link too.' : ''}`);
   else hud.say('Getting a pairing code', 'One moment.');
   // browsers keep a page silent until it's clicked, and the phone does everything else
   hud.hint(sound.ctx?.state === 'running' ? '' : 'Click anywhere on this screen to turn the sound on');
@@ -530,7 +601,8 @@ function pairing() {
 // opened from a friend's invite, the pairing screen says so
 function invited() {
   if (!online || online.host) return '';
-  return online.here ? `${foe()} invited you to a match. ` : 'You\'re joining a friend\'s match. ';
+  if (online.here) return `${foe()} invited you to a match. `;
+  return online.route === 'relay' ? 'Connecting to your friend\'s game another way. ' : 'Connecting to your friend\'s game. ';
 }
 
 function phoneMenu() {
@@ -566,6 +638,8 @@ $('inviteShare').addEventListener('click', () => {
   navigator.share?.({ title: 'FlickPong', text: 'Play me at table tennis. Open this on your laptop, then pair your phone as the paddle.', url: $('inviteLink').value }).catch(() => {});
 });
 $('inviteLink').addEventListener('focus', e => e.target.select());
+$('friendStart').addEventListener('click', () => { if (mode === 'find' && !online && link.peer?.open) startInvite(); });
+$('inviteCancel').addEventListener('click', () => endOnline());
 
 // the game is played on a big screen with the phone as the paddle. opened on a phone itself, it says so first.
 // tablets have a screen at least 600 wide either way round, so they go straight in
@@ -573,11 +647,17 @@ const onPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen
 
 function bigScreenFirst() {
   $('small').hidden = false;
+  // a friend's invite opened on a phone: it's the invite itself that has to go to the computer
+  if (joinId) {
+    $('smallTitle').textContent = 'Open this invite on a laptop or tablet';
+    $('smallOpen').textContent = 'Send this link to your laptop or tablet, and open it there.';
+    $('smallShare').textContent = 'Share invite link';
+  }
   $('smallShare').addEventListener('click', async () => {
-    const url = location.origin + '/';
+    const url = joinId ? location.href : 'https://flickpong.vercel.app/';
     try {
-      if (navigator.share) await navigator.share({ title: 'FlickPong', text: 'Table tennis played with your phone as the paddle', url });
-      else { await navigator.clipboard.writeText(url); $('smallNote').textContent = 'Link copied. Paste it into your computer\'s browser.'; $('smallNote').hidden = false; }
+      if (navigator.share) await navigator.share({ title: 'FlickPong', text: joinId ? 'Open this on your laptop to join the match.' : 'Table tennis with your phone as the racket.', url });
+      else { await navigator.clipboard.writeText(url); $('smallNote').textContent = 'Copied. Open it on your laptop or tablet.'; $('smallNote').hidden = false; }
     } catch (e) {}
   });
   return new Promise(resolve => $('smallAnyway').addEventListener('click', () => {
@@ -602,7 +682,7 @@ async function boot() {
   mode = 'find';
   document.body.classList.add('finding');
   pairing();
-  try { await link.start(); }
+  try { await link.start({ fresh: !!joinId }); }
   catch (e) { hud.say('Phone pairing unavailable', e.message); }
 }
 

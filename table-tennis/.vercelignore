@@ -10,3 +10,4 @@ firestore.rules
 STATUS.md
 *-debug.log
 PRODUCT.md
+database.rules.json

@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- outside connections: the phone pairing service (after that the phone talks to this tab directly), and google sign-in
-     with the firebase database that keeps a signed-in player's record -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/ https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googleapis.com; frame-src https://flickpong-game.firebaseapp.com https://accounts.google.com">
+<!-- outside connections: the phone pairing service (after that the phone talks to this tab directly), google sign-in with
+     the firebase database that keeps a signed-in player's record, and the firebase relay for friends' laptops that can't
+     connect directly -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/ https://apis.google.com https://*.asia-southeast1.firebasedatabase.app; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googleapis.com https://*.asia-southeast1.firebasedatabase.app wss://*.asia-southeast1.firebasedatabase.app; frame-src https://flickpong-game.firebaseapp.com https://accounts.google.com">
 <title>Table Tennis</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='10' fill='%23d8232f'/%3E%3Crect x='17.5' y='19' width='5' height='12' rx='2' transform='rotate(-45 20 25)' fill='%23c9a06b'/%3E%3Ccircle cx='26' cy='6' r='3.5' fill='%23ff8a1f'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
@@ -57,29 +58,45 @@
 </aside>
 
 <div id="small" hidden>
-  <svg viewBox="0 0 96 64" aria-hidden="true"><rect x="4" y="6" width="58" height="38" rx="4"/><rect class="glass" x="9" y="11" width="48" height="28" rx="1"/><rect x="0" y="46" width="66" height="5" rx="2.5"/><rect x="72" y="18" width="20" height="38" rx="4"/><rect class="glass" x="75" y="23" width="14" height="26" rx="1"/></svg>
-  <h1>Play on a bigger screen</h1>
-  <p>FlickPong plays on a laptop or tablet, and your phone becomes the paddle. Open <b>flickpong.vercel.app</b> there, then scan its code with this phone.</p>
-  <button id="smallShare" type="button">Send the link to my computer</button>
-  <button id="smallAnyway" class="quiet" type="button">Play here anyway</button>
-  <p id="smallNote" role="status" hidden></p>
+  <div class="card">
+    <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="4.5" width="13.5" height="9.5" rx="1.5"/><path d="M1 17.5h11.5"/><rect x="16.5" y="9" width="6" height="11" rx="1.5"/></svg></span>
+    <h1 id="smallTitle">Play on a laptop or tablet</h1>
+    <p>Your phone is the racket.</p>
+    <ol>
+      <li><span id="smallOpen">Open <b>flickpong.vercel.app</b> on a laptop or tablet.</span></li>
+      <li><span>Scan the code it shows with this phone.</span></li>
+      <li><span>Point to aim. Flick to hit.</span></li>
+    </ol>
+    <div class="actions">
+      <button id="smallShare" type="button">Share link</button>
+      <button id="smallAnyway" class="ghost" type="button">Play here anyway</button>
+    </div>
+    <p id="smallNote" role="status" hidden></p>
+  </div>
 </div>
 
 <span id="lag"></span>
 
-<div id="pair" hidden>
-  <div id="qr"></div>
-  <p id="link"></p>
-</div>
-
-<div id="invite" hidden>
-  <label for="inviteLink">Invite link</label>
-  <input id="inviteLink" type="text" readonly spellcheck="false" autocomplete="off">
-  <div class="buttons">
-    <button id="inviteCopy" type="button">Copy link</button>
-    <button id="inviteShare" class="quiet" type="button" hidden>Share</button>
+<div id="stage">
+  <div id="pair" hidden>
+    <div id="qr"></div>
+    <p id="link"></p>
+    <button id="friendStart" type="button" hidden>Play a friend online</button>
   </div>
-  <p>Matches against a friend are played at Club pace and don't change league points.</p>
+
+  <div id="invite" hidden>
+    <div class="head">
+      <label for="inviteLink">Invite link</label>
+      <button id="inviteCancel" class="text" type="button">Cancel</button>
+    </div>
+    <input id="inviteLink" type="text" readonly spellcheck="false" autocomplete="off">
+    <div class="buttons">
+      <button id="inviteCopy" type="button">Copy link</button>
+      <button id="inviteShare" class="quiet" type="button" hidden>Share</button>
+    </div>
+    <p id="inviteStatus" role="status"></p>
+    <p>Matches against a friend are played at Club pace and don't change league points.</p>
+  </div>
 </div>
 
 <pre id="debug" hidden></pre>

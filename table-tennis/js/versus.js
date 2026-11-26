@@ -42,18 +42,21 @@ export class Versus {
     this.early = [];
   }
 
-  // conn is a PeerJS data connection to the friend's laptop
+  // conn is a PeerJS data connection to the friend's laptop, or a link through the relay (relay.js), which may already be open
   use(conn) {
     this.conn = conn;
+    this.relayed = !!conn.relay;
     this.send = m => { if (conn.open) conn.send(m); };
-    conn.on('open', () => {
+    const opened = () => {
       this.open = true;
       this.heard = performance.now() / 1000;
       this.events.push({ k: 'open' });
-    });
+    };
+    conn.on('open', opened);
     conn.on('data', d => this.receive(d, performance.now() / 1000));
     conn.on('close', () => this.gone());
     conn.on('error', () => this.gone());
+    if (conn.open) opened();
   }
 
   gone() {

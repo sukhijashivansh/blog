@@ -5,7 +5,8 @@
     "dev": "node dev/serve.mjs",
     "test": "node --test",
     "e2e": "node e2e/browser.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-flickpong \"node e2e/rules.mjs\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-flickpong \"node e2e/rules.mjs\"",
+    "e2e:online": "firebase emulators:exec --only database --project demo-flickpong \"node e2e/online.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",

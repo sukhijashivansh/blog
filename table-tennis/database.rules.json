@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "$room.matches(/^tt-[a-z0-9]{1,24}$/)",
+        ".write": "$room.matches(/^tt-[a-z0-9]{1,24}$/)",
+        "$side": {
+          ".validate": "$side === 'host' || $side === 'guest'",
+          "here": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "pose": { ".validate": "newData.isString() && newData.val().length <= 400" },
+          "m": { "$id": { ".validate": "newData.isString() && newData.val().length <= 2000" } },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}
