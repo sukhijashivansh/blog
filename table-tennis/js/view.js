@@ -6,7 +6,11 @@ import { maple, walnut, oak, ash, plies, rubber, sponge, wood, metal } from './m
 // the look: a daylit studio, the way a product shot is lit. a pale maple floor fades into cool white air, so the warmth comes from
 // the wood alone. daylight falls soft from the front left, and the table is tournament blue on a walnut and oak frame. guides stay
 // vivid and edged in white, so they read on wood and on blue
-const HAZE = 0xeef0f3;
+// dark mode is the same room in the evening: the air and floor dim and the overhead light stays on the table
+const LOOKS = {
+  light: { haze: 0xeef0f3, fog: [4.5, 15], sky: 0xffffff, ground: 0xd6cbb8, hemi: 0.55, sun: 2.3, fill: 0.35, env: 0.55, floor: 0xffffff, exposure: 1.04 },
+  dark: { haze: 0x121418, fog: [3.2, 11], sky: 0xa9b8cf, ground: 0x2b2621, hemi: 0.26, sun: 2.15, fill: 0.16, env: 0.3, floor: 0x6f6a66, exposure: 1 },
+};
 const WHITE = 0xffffff, BLUE = 0x1f6bff, GREEN = 0x14b35a, YELLOW = 0xffc21a, NAVY = 0x0f2f6b, RED = 0xa8102a, BLACK = 0x161616;
 const TRAIL = 18, BALL_SIZE = 1.5, MAX_SHOWN_SPIN = 34, PADDLE_SCALE = 1.25;
 // if frames keep running this much slower than the screen can show them, the picture drops a notch in resolution.
@@ -85,24 +89,23 @@ export class View {
     r.shadowMap.type = THREE.PCFShadowMap;
     // neutral tone mapping keeps the table's blue and the rubber's red true to colour, the way a product shot does
     r.toneMapping = THREE.NeutralToneMapping;
-    r.toneMappingExposure = 1.04;
     const s = this.scene = new THREE.Scene(), aniso = Math.min(8, r.capabilities.getMaxAnisotropy());
     // one even haze behind everything, so nothing marks where the floor ends. the page lays a soft top light over it
-    s.background = new THREE.Color(HAZE);
+    s.background = new THREE.Color();
     // the floor melts into the backdrop well before the horizon, like a photo studio's curved wall
-    s.fog = new THREE.Fog(HAZE, 4.5, 15);
+    s.fog = new THREE.Fog();
     // soft studio reflections on the wood, rubber and metal, worked out once at the start
     const pmrem = new THREE.PMREMGenerator(r);
     s.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    s.environmentIntensity = 0.55;
     pmrem.dispose();
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.05, 40);
     this.camera.position.set(0, EYE.y, EYE.z);
     this.camera.lookAt(0, LOOK.y, LOOK.z);
 
     // the ground light is the maple floor bouncing back, so it stays a little warm. the daylight itself is close to neutral
-    s.add(new THREE.HemisphereLight(0xffffff, 0xd6cbb8, 0.55));
-    const sun = new THREE.DirectionalLight(0xfff7ef, 2.3);
+    const hemi = this.hemi = new THREE.HemisphereLight();
+    s.add(hemi);
+    const sun = this.sun = new THREE.DirectionalLight(0xfff7ef);
     sun.position.set(-2.2, 5, 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -111,17 +114,18 @@ export class View {
     sun.shadow.radius = 3;
     Object.assign(sun.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, far: 12 });
     s.add(sun);
-    const fill = new THREE.DirectionalLight(0xe4ecff, 0.35);
+    const fill = this.fill = new THREE.DirectionalLight(0xe4ecff);
     fill.position.set(3, 2.5, -2);
     s.add(fill);
 
     const floorMap = maple(aniso);
     floorMap.repeat.set(107, 54);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.38, envMapIntensity: 0.6 }));
+    const floor = this.floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.38, envMapIntensity: 0.6 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     s.add(floor);
     this.buildTable(s, aniso);
+    this.setTheme(document.documentElement.dataset.theme === 'dark');
 
     this.ballMesh = new THREE.Group();
     const skin = document.createElement('canvas');
@@ -234,6 +238,21 @@ export class View {
       box(s, 0.016, netH + 0.01, 0.016, post, x, H + netH / 2, 0);
       box(s, 0.03, 0.03, 0.05, post, x - Math.sign(x) * 0.012, H - 0.01, 0);
     }
+  }
+
+  setTheme(dark) {
+    const L = dark ? LOOKS.dark : LOOKS.light, s = this.scene;
+    s.background.setHex(L.haze);
+    s.fog.color.setHex(L.haze);
+    [s.fog.near, s.fog.far] = L.fog;
+    s.environmentIntensity = L.env;
+    this.hemi.color.setHex(L.sky);
+    this.hemi.groundColor.setHex(L.ground);
+    this.hemi.intensity = L.hemi;
+    this.sun.intensity = L.sun;
+    this.fill.intensity = L.fill;
+    this.floor.material.color.setHex(L.floor);
+    this.renderer.toneMappingExposure = L.exposure;
   }
 
   resize() {

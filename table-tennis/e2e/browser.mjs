@@ -172,6 +172,25 @@ check('phone shows paused too', !!await until(async () => (await phone.textConte
 await phone.evaluate(() => { __on = true; });
 check('moving the phone counts back in and resumes', !!await until(async () => ['3', '2', '1'].includes(await lap.textContent('#title')), 4000) && !!await until(async () => (await lap.textContent('#title')) !== 'Paused' && !['3', '2', '1'].includes(await lap.textContent('#title')), 6000));
 
+// the phone's Pause button: the game waits for Resume, however steady the phone is
+check('the phone shows Pause during a match', !!await until(() => phone.isVisible('#pause'), 4000));
+await phone.click('#pause');
+check('Pause on the phone pauses the game', !!await until(async () => (await lap.textContent('#title')) === 'Paused' && (await lap.textContent('#sub')).includes('Resume'), 4000));
+await sleep(1500);
+check('and it stays paused while the phone keeps moving', (await lap.textContent('#title')) === 'Paused');
+await phone.click('#menu button:has-text("Resume")');
+check('Resume on the phone counts back in', !!await until(async () => ['3', '2', '1'].includes(await lap.textContent('#title')), 4000));
+
+// light and dark, picked on the phone for both screens
+const look = page => page.evaluate(() => document.documentElement.dataset.theme);
+await phone.click('[data-look="dark"]');
+check('the phone switches both screens to dark', !!await until(async () => await look(lap) === 'dark' && await look(phone) === 'dark', 4000));
+await sleep(800);
+await lap.screenshot({ path: path.join(OUT, 'e2e-dark.png') });
+await phone.screenshot({ path: path.join(OUT, 'e2e-phone-dark.png') });
+await phone.click('[data-look="light"]');
+check('and back to light', !!await until(async () => await look(lap) === 'light' && await look(phone) === 'light', 4000));
+
 // phone settings: aim speed and hold to recenter
 await phone.click('[data-speed="quick"]');
 check('aim speed switches', (await phone.getAttribute('[data-speed="quick"]', 'aria-pressed')) === 'true' && (await phone.getAttribute('[data-speed="normal"]', 'aria-pressed')) === 'false');
@@ -264,6 +283,13 @@ await phoneB.evaluate(() => { __on = true; });
 const counting = ['3', '2', '1'], held = ['Paused', 'Your friend\'s phone dropped out', ...counting];
 check('both count back in together', !!await until(async () => counting.includes(await lap.textContent('#title')) && counting.includes(await lapB.textContent('#title')), 5000));
 check('and play on', !!await until(async () => !held.includes(await lap.textContent('#title')) && !held.includes(await lapB.textContent('#title')), 8000));
+
+// the friend pauses from their phone: both games stop, and the inviter is told why
+await until(() => phoneB.isVisible('#pause'), 4000);
+await phoneB.click('#pause');
+check('a friend pausing from their phone pauses both games', !!await until(async () => (await lap.textContent('#title')) === 'Your friend paused the match' && (await lapB.textContent('#title')) === 'Paused', 6000), `inviter: ${await lap.textContent('#title')}, friend: ${await lapB.textContent('#title')}`);
+await phoneB.click('#menu button:has-text("Resume")');
+check('and their Resume counts both back in', !!await until(async () => counting.includes(await lap.textContent('#title')) && counting.includes(await lapB.textContent('#title')), 5000));
 
 // the friend's laptop closes: the inviter is told and goes back to the menu
 await lapB.context().close();

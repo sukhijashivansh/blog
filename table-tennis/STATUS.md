@@ -9,7 +9,7 @@ Live at **https://flickpong.vercel.app**, and on your site at https://www.shivan
 - **Tests:** run `npm test` in this folder. It runs 56 checks in about 10 seconds and needs nothing installed.
 - **Database rules:** run `npm install` once, then `npm run test:rules`. It runs 16 checks against Firebase's own rules engine in a local emulator, needs Java, and never touches the real database.
 - **Online test:** `npm run e2e:online` plays friends through the relay and checks its rules, against a local copy of the database. It needs Java, like the rules test.
-- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game, then plays an online match between two laptops with two phones (57 checks).
+- **Browser test:** run `npm install` once, plus `npx playwright install chromium`, then `npm run e2e`. It drives a real game tab and a real phone tab through the whole game, then plays an online match between two laptops with two phones (65 checks).
 - **Local run with lag numbers:** `npm run dev`, then open http://localhost:8790. **D** shows the lag panel and **P** switches lag compensation (off, half, full).
 
 ## What's been checked
@@ -74,6 +74,23 @@ Rallies average 4–24 strokes, getting longer with skill. The opponent gets sli
 - **Every panel kept its dark backing,** so text stays readable on the bright scene. This was checked on a laptop, and on a tablet in landscape and portrait.
 - **It still runs at a steady 60 fps.** The median frame is 16.7 ms, with 0 long frames over a full match in the browser test.
 - **Nothing about play changed.** All 48 game checks and 38 browser checks passed at the time.
+
+### Scoreboard, pause, and light or dark (26 Nov)
+- **The scoreboard is laid out like a broadcast graphic.**
+  - You're marked in red and the opponent in blue, after the paddles' rubbers and the table.
+  - An orange ball sits beside whoever is serving, games show in a small pill, and the points are large.
+  - A side that wins a point glows in its colour for a moment.
+  - The header shows the game number, "Deuce", "Game point" or "Match point" in the leader's colour, and who took a finished game.
+- **Pause on the phone.** During a match a Pause button sits at the top of the phone page.
+  - The game then waits for Resume on the phone, however steady the phone is, with End match as the other choice.
+  - Playing a friend, both games stop, and the friend's screen says you paused.
+- **Light and dark.**
+  - Light is the daylit studio with white panels. Dark is the same room in the evening: the table stays lit and the panels turn dark.
+  - Each screen follows its own device's setting until you pick one under Look on the phone. That sets both screens and is remembered.
+- **Checked in the browser test:**
+  - Pause shows during a match, the game stays paused while the phone keeps moving, and Resume counts back in.
+  - The phone switches both screens to dark and back.
+  - A friend's pause stops both games and tells the other player.
 
 ### Playing a friend online
 - **How it works:** click **Play a friend online** on the first screen, or pick "A friend" from the menu once your phone is paired, and the game shows an invite link to copy or share. Your friend opens it on their own laptop or tablet and pairs their own phone. If it's their first time, they get the warm-up while you wait. Once they're ready, you pick how long to play.

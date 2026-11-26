@@ -8,11 +8,12 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com">
 <title>Phone Paddle</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='10' fill='%23d8232f'/%3E%3Crect x='17.5' y='19' width='5' height='12' rx='2' transform='rotate(-45 20 25)' fill='%23c9a06b'/%3E%3Ccircle cx='26' cy='6' r='3.5' fill='%23ff8a1f'/%3E%3C/svg%3E">
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="phone.css">
 </head>
 <body>
 <main>
-  <header><span id="dot"></span><span id="status">Connecting to the game</span></header>
+  <header><span id="dot"></span><span id="status">Connecting to the game</span><button id="pause" type="button" hidden>Pause</button></header>
 
   <section id="intro">
     <svg class="phone" viewBox="0 0 54 64" aria-hidden="true"><rect x="12" y="4" width="30" height="56" rx="6"/><rect class="glass" x="16" y="10" width="22" height="42" rx="2"/></svg>
@@ -26,9 +27,15 @@
     <h1 id="title">Ready</h1>
     <p id="sub" class="muted"></p>
     <div id="menu"></div>
-    <div class="speed" role="group" aria-label="Aim speed">
-      <span>Aim speed</span>
-      <button data-speed="gentle">Gentle</button><button data-speed="normal">Normal</button><button data-speed="quick">Quick</button>
+    <div class="settings">
+      <div class="seg" role="group" aria-label="Aim speed">
+        <span>Aim speed</span>
+        <button data-speed="gentle">Gentle</button><button data-speed="normal">Normal</button><button data-speed="quick">Quick</button>
+      </div>
+      <div class="seg" role="group" aria-label="Look">
+        <span>Look</span>
+        <button data-look="light">Light</button><button data-look="dark">Dark</button>
+      </div>
     </div>
     <button id="center">Hold to recenter<small>Point at the middle of the game screen, then press and hold</small><i></i></button>
   </section>

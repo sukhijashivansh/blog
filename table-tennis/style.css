@@ -1,24 +1,49 @@
-:root { --panel: rgba(22, 24, 28, .9); --text: #f2f4f7; --muted: rgba(242, 244, 247, .76); --line: rgba(255, 255, 255, .18); --blue: #7fe3ff; --green: #57e389; --orange: #ff8a1f; }
+/* light is the daylit studio with white panels. dark dims the room to an evening hall, with dark panels. you are red and the
+   opponent blue throughout, after the two paddles' rubbers and the table, and the serve is marked with the ball's orange */
+:root { --bg: #eef0f3; --panel: rgba(255, 255, 255, .92); --text: #15171b; --muted: rgba(21, 23, 27, .62); --line: rgba(21, 23, 27, .12);
+  --soft: rgba(21, 23, 27, .05); --soft-2: rgba(21, 23, 27, .09); --blue: #0b6bcb; --green: #12813a; --orange: #c75a09; --ball: #ff8a1f;
+  --accent: #15171b; --on-accent: #fff; --you: #d42a35; --foe: #2a64d6; --me-tint: rgba(11, 107, 203, .08);
+  --shadow: 0 1px 2px rgba(21, 23, 27, .06), 0 8px 24px rgba(21, 23, 27, .08); color-scheme: light; }
+:root[data-theme="dark"] { --bg: #121418; --panel: rgba(24, 26, 31, .9); --text: #f2f4f7; --muted: rgba(242, 244, 247, .7); --line: rgba(255, 255, 255, .14);
+  --soft: rgba(255, 255, 255, .06); --soft-2: rgba(255, 255, 255, .12); --blue: #7fe3ff; --green: #57e389; --orange: #ff8a1f;
+  --accent: #7fe3ff; --on-accent: #0b1a20; --you: #ff5c66; --foe: #6fa6ff; --me-tint: rgba(127, 227, 255, .1);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28); color-scheme: dark; }
 * { box-sizing: border-box; margin: 0; }
 [hidden] { display: none !important; }
-html, body { height: 100%; overflow: hidden; background: #eef0f3; color: var(--text); font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 /* the studio's daylight: brighter overhead, falling off gently to cool corners, laid over the 3D scene */
 #light { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(120% 70% at 50% -12%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 60%), radial-gradient(150% 120% at 50% 55%, rgba(34, 42, 56, 0) 58%, rgba(34, 42, 56, .1) 100%); }
+/* in the evening hall, a faint glow from the lights overhead and deeper corners */
+:root[data-theme="dark"] #light { background: radial-gradient(120% 70% at 50% -12%, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 60%), radial-gradient(150% 120% at 50% 55%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, .35) 100%); }
+#board, #prompt, #call, #leaders, #me, #pair, #invite, #gate, #accountNote { box-shadow: var(--shadow); }
 
-#board { position: fixed; top: 16px; left: 16px; min-width: 200px; padding: 10px 12px; background: var(--panel); border-radius: 8px; font-variant-numeric: tabular-nums; }
-.row { display: flex; align-items: center; gap: 8px; height: 28px; position: relative; padding-left: 16px; }
-.dot { position: absolute; left: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
-.name { flex: 1; }
-.games { opacity: .65; }
-.pts { width: 32px; text-align: right; font-size: 22px; font-weight: 700; }
-#info { margin-top: 4px; font-size: 12px; opacity: .7; }
+/* the scoreboard, laid out like a broadcast graphic: each side marked in its colour, the server by a ball, games in a small pill,
+   and the points large. a side that wins a point glows in its colour for a moment, and the header calls game and match points */
+#board { position: fixed; top: 16px; left: 16px; width: 248px; padding: 8px 10px 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; font-variant-numeric: tabular-nums; }
+#board .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 22px; padding: 0 2px 6px; margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+#info { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#state { flex: none; white-space: nowrap; }
+#state.you { color: var(--you); }
+#state.foe { color: var(--foe); }
+#board .side { --side: var(--you); display: grid; grid-template-columns: 4px minmax(0, 1fr) 8px auto 34px; align-items: center; gap: 10px; height: 34px; padding: 0 2px; border-radius: 8px; }
+#board .foe { --side: var(--foe); }
+#board .bar { width: 4px; height: 18px; border-radius: 2px; background: var(--side); }
+#board .name { overflow: hidden; font-size: 15px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+#board .serve { width: 8px; height: 8px; border-radius: 50%; background: var(--ball); visibility: hidden; }
+#board .serve.on { visibility: visible; }
+#board .games { min-width: 22px; padding: 1px 6px; font-size: 12px; font-weight: 600; line-height: 18px; text-align: center; color: var(--muted); background: var(--soft); border-radius: 6px; }
+#board .pts { font-size: 22px; font-weight: 700; line-height: 1; text-align: right; }
+#board .side.won { animation: won 1.4s ease-out; }
+#board .side.won .pts { animation: pop .4s ease-out; }
+@keyframes won { from { background: color-mix(in srgb, var(--side) 16%, transparent); } to { background: transparent; } }
+@keyframes pop { 35% { transform: scale(1.2); } }
 
 #prompt { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; width: min(600px, calc(100vw - 32px)); padding: 12px 16px; text-align: center; background: var(--panel); border-radius: 10px; pointer-events: none; }
 #prompt h1 { font-size: 24px; line-height: 1.15; }
 #sub { font-size: 15px; color: var(--muted); }
 #hint { font-size: 13px; color: var(--muted); }
-#meter { width: 100%; height: 6px; margin-top: 4px; background: rgba(255, 255, 255, .2); border-radius: 3px; overflow: hidden; }
+#meter { width: 100%; height: 6px; margin-top: 4px; background: var(--soft-2); border-radius: 3px; overflow: hidden; }
 #fill { width: 0; height: 100%; background: var(--blue); }
 
 #demo { width: 44px; height: 52px; color: var(--blue); }
@@ -36,7 +61,7 @@ html, body { height: 100%; overflow: hidden; background: #eef0f3; color: var(--t
 @keyframes show { 0%, 100% { transform: scale(.94); } 50% { transform: scale(1.06); } }
 
 #choices { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; width: 100%; margin-top: 6px; }
-.choice { position: relative; display: grid; justify-items: center; gap: 1px; padding: 8px 6px 10px; overflow: hidden; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 8px; transition: background .15s, border-color .15s; }
+.choice { position: relative; display: grid; justify-items: center; gap: 1px; padding: 8px 6px 10px; overflow: hidden; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; transition: background .15s, border-color .15s; }
 .choice b { font-size: 15px; }
 .choice small { font-size: 12px; color: var(--muted); }
 
@@ -54,21 +79,21 @@ html, body { height: 100%; overflow: hidden; background: #eef0f3; color: var(--t
 #stage > * { pointer-events: auto; }
 #pair { display: grid; justify-items: center; gap: 8px; width: min(300px, 100%); padding: 14px; text-align: center; background: var(--panel); border-radius: 12px; }
 #qr { width: min(240px, 42vh); aspect-ratio: 1; padding: 6px; background: #fff; border-radius: 6px; }
-#qr:empty { background: rgba(255, 255, 255, .1); }
+#qr:empty { background: var(--soft); }
 #qr svg { display: block; width: 100%; height: 100%; }
 #link { max-width: 100%; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-#friendStart { justify-self: stretch; height: 40px; margin-top: 4px; font: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: rgba(255, 255, 255, .08); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
-#friendStart:hover { background: rgba(255, 255, 255, .14); }
+#friendStart { justify-self: stretch; height: 40px; margin-top: 4px; font: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+#friendStart:hover { background: var(--soft-2); }
 #friendStart:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* the invite link for a friend, with a way to send it */
 #invite { display: grid; gap: 10px; width: min(460px, 100%); padding: 16px; background: var(--panel); border-radius: 12px; }
 #invite .head { display: flex; align-items: center; justify-content: space-between; }
 #invite label { font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-#inviteLink { width: 100%; min-width: 0; padding: 10px 12px; font: 14px/1.3 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 8px; }
+#inviteLink { width: 100%; min-width: 0; padding: 10px 12px; font: 14px/1.3 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--text); background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
 #invite .buttons { display: flex; gap: 8px; }
-#invite button { flex: 1; height: 44px; font: inherit; font-size: 15px; font-weight: 700; color: #0b1a20; background: var(--blue); border: 0; border-radius: 10px; cursor: pointer; }
-#invite button.quiet { color: var(--text); background: rgba(255, 255, 255, .08); border: 1px solid var(--line); }
+#invite button { flex: 1; height: 44px; font: inherit; font-size: 15px; font-weight: 700; color: var(--on-accent); background: var(--accent); border: 0; border-radius: 10px; cursor: pointer; }
+#invite button.quiet { color: var(--text); background: var(--soft); border: 1px solid var(--line); }
 #invite button.text { flex: none; height: auto; padding: 2px 4px; font-size: 13px; font-weight: 600; color: var(--muted); background: none; }
 #invite button.text:hover { color: var(--text); }
 #invite p { font-size: 13px; color: var(--muted); }
@@ -107,15 +132,15 @@ body.gated #prompt, body.gated #pair, body.gated #invite, body.gated #lag, body.
 #myRank:empty { display: none; }
 .leaders { display: grid; gap: 4px; padding: 0; list-style: none; text-align: left; }
 .leaders li { display: grid; grid-template-columns: 18px 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 30px; padding: 2px 6px; font-size: 14px; border-radius: 6px; }
-.leaders li.me { color: var(--blue); background: rgba(127, 227, 255, .1); }
+.leaders li.me { color: var(--blue); background: var(--me-tint); }
 .leaders li.empty { display: block; padding: 6px; color: var(--muted); text-align: center; }
 .leaders .rank { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
-.leaders img, .leaders .nopic { width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 255, 255, .12); }
+.leaders img, .leaders .nopic { width: 24px; height: 24px; border-radius: 50%; background: var(--soft-2); }
 .leaders .who { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .leaders b { font-variant-numeric: tabular-nums; }
 
 /* opened on a phone, the game asks for a bigger screen first */
-/* a short card in the shadcn/ui style: zinc neutrals, small type, one dark button. it follows the phone's light or dark setting */
+/* a short card in the shadcn/ui style: zinc neutrals, small type, one dark button, in the game's light or dark look */
 #small { --c-bg: #fafafa; --c-card: #fff; --c-fg: #09090b; --c-muted: #71717a; --c-line: #e4e4e7; --c-soft: #f4f4f5; --c-primary: #18181b; --c-on-primary: #fafafa;
   position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto; font-size: 14px; line-height: 20px; color: var(--c-fg); background: var(--c-bg); }
 #small .card { width: min(360px, 100%); padding: 24px; background: var(--c-card); border: 1px solid var(--c-line); border-radius: 12px; box-shadow: 0 1px 3px rgb(0 0 0 / .08), 0 1px 2px -1px rgb(0 0 0 / .08); }
@@ -131,9 +156,7 @@ body.gated #prompt, body.gated #pair, body.gated #invite, body.gated #lag, body.
 #small button.ghost:active { background: var(--c-soft); }
 #small button:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
 #smallNote { margin-top: 12px; font-size: 12px; line-height: 16px; color: var(--c-muted); text-align: center; }
-@media (prefers-color-scheme: dark) {
-  #small { --c-bg: #09090b; --c-card: #09090b; --c-fg: #fafafa; --c-muted: #a1a1aa; --c-line: #27272a; --c-soft: #27272a; --c-primary: #fafafa; --c-on-primary: #18181b; }
-}
+:root[data-theme="dark"] #small { --c-bg: #09090b; --c-card: #09090b; --c-fg: #fafafa; --c-muted: #a1a1aa; --c-line: #27272a; --c-soft: #27272a; --c-primary: #fafafa; --c-on-primary: #18181b; }
 #debug { position: fixed; right: 16px; bottom: 44px; max-width: calc(100vw - 32px); margin: 0; padding: 8px 10px; overflow: hidden; font: 12px/1.5 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--muted); white-space: pre-wrap; background: var(--panel); border-radius: 6px; pointer-events: none; }
 #lag { position: fixed; right: 16px; bottom: 16px; padding: 2px 8px; font-size: 12px; color: var(--muted); background: var(--panel); border-radius: 4px; }
 #lag:empty { display: none; }
@@ -147,10 +170,11 @@ body.gated #prompt, body.gated #pair, body.gated #invite, body.gated #lag, body.
   #account { top: auto; right: auto; bottom: 132px; left: 16px; justify-items: start; }
   #leaders { display: none !important; }
   #accountNote { text-align: left; }
-  #board { top: auto; bottom: 16px; left: 16px; min-width: 150px; }
+  #board { top: auto; bottom: 16px; left: 16px; width: 220px; }
   #call { bottom: auto; top: 50%; }
 }
 @media (prefers-reduced-motion: reduce) {
   #demo svg { animation: none !important; }
   .choice, #pips i { transition: none; }
+  #board .side.won, #board .side.won .pts { animation: none; }
 }

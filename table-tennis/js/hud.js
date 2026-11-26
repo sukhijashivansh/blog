@@ -1,4 +1,4 @@
-import { NEAR, clamp } from './config.js';
+import { NEAR, FAR, clamp } from './config.js';
 
 const $ = id => document.getElementById(id);
 
@@ -79,15 +79,35 @@ export class Hud {
     if (this.flashT > 0 && (this.flashT -= dt) <= 0) $('call').hidden = true;
   }
 
+  // a point just won lights its side for a moment. the header says which game it is, or deuce, or a game or match point
+  // and whose, or who took the game once it's decided
   board(game) {
     const m = game.match;
     if (!m) return;
-    $('pYou').textContent = m.score[NEAR];
-    $('pCpu').textContent = m.score[1];
+    const [you, foe] = m.score, before = this.shown?.match === m ? this.shown : null;
+    if (before && you > before.you) this.lightUp('rowYou');
+    if (before && foe > before.foe) this.lightUp('rowFoe');
+    this.shown = { match: m, you, foe };
+    $('pYou').textContent = you;
+    $('pCpu').textContent = foe;
     $('gYou').textContent = m.games[NEAR];
-    $('gCpu').textContent = m.games[1];
-    $('sYou').hidden = m.server !== NEAR;
-    $('sCpu').hidden = m.server === NEAR;
-    $('info').textContent = `${game.level.name} · Best of ${m.bestOf}${m.deuce ? ' · Deuce' : ''}`;
+    $('gCpu').textContent = m.games[FAR];
+    $('sYou').classList.toggle('on', m.server === NEAR);
+    $('sCpu').classList.toggle('on', m.server !== NEAR);
+    $('info').textContent = `${game.level.name} · Best of ${m.bestOf}`;
+    const lead = you > foe ? NEAR : foe > you ? FAR : null, name = lead === NEAR ? 'you' : $('foeName').textContent;
+    let state = `Game ${m.games[NEAR] + m.games[FAR] + 1}`;
+    if (Math.max(you, foe) >= 11 && Math.abs(you - foe) >= 2) state = `${m.winner !== null ? 'Match' : 'Game'} to ${name}`;
+    else if (you >= 10 && you === foe) state = 'Deuce';
+    else if (lead !== null && Math.max(you, foe) >= 10) state = m.games[lead] + 1 >= m.needed ? 'Match point' : 'Game point';
+    $('state').textContent = state;
+    $('state').className = lead === null || /^Game \d/.test(state) ? '' : lead === NEAR ? 'you' : 'foe';
+  }
+
+  lightUp(id) {
+    const row = $(id);
+    row.classList.remove('won');
+    void row.offsetWidth;
+    row.classList.add('won');
   }
 }

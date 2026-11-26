@@ -42,6 +42,8 @@ export class PhoneLink {
     this.trips = [];
     this.ways = [];
     this.phone = null;
+    // what the phone asks for besides menu taps: to pause, or to switch between light and dark
+    this.asks = [];
     // a friend's laptop connects to the same pairing id as the phone does, saying it's a friend. onFriend takes it from there,
     // and onError hears about a friend's game that can't be found
     this.onFriend = null;
@@ -117,6 +119,7 @@ export class PhoneLink {
   receive(d) {
     if (!d || typeof d !== 'object') return;
     if (d.k === 'tap') { this.taps.push(d.n); return; }
+    if (d.k === 'pause' || (d.k === 'theme' && (d.v === 'light' || d.v === 'dark'))) { this.asks.push(d); return; }
     if (d.k === 'pong' && Number.isFinite(d.t)) {
       const rtt = performance.now() - d.t;
       this.lag = this.lag === null ? rtt / 2 : this.lag + (rtt / 2 - this.lag) * 0.3;
@@ -174,6 +177,8 @@ export class PhoneLink {
   }
 
   takeTap() { return this.taps.length ? this.taps.shift() : null; }
+
+  takeAsks() { return this.asks.splice(0); }
 
   // opens a link to a friend's game, on their laptop's pairing id. messages there must arrive, and in order
   callFriend(id) {

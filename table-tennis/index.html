@@ -9,6 +9,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/ https://apis.google.com https://*.asia-southeast1.firebasedatabase.app; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googleapis.com https://*.asia-southeast1.firebasedatabase.app wss://*.asia-southeast1.firebasedatabase.app; frame-src https://flickpong-game.firebaseapp.com https://accounts.google.com">
 <title>Table Tennis</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='10' fill='%23d8232f'/%3E%3Crect x='17.5' y='19' width='5' height='12' rx='2' transform='rotate(-45 20 25)' fill='%23c9a06b'/%3E%3Ccircle cx='26' cy='6' r='3.5' fill='%23ff8a1f'/%3E%3C/svg%3E">
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,9 +17,9 @@
 <div id="light" aria-hidden="true"></div>
 
 <div id="board" hidden>
-  <div class="row"><span class="dot" id="sYou"></span><span class="name">You</span><span class="games" id="gYou">0</span><span class="pts" id="pYou">0</span></div>
-  <div class="row"><span class="dot" id="sCpu" hidden></span><span class="name" id="foeName">Opponent</span><span class="games" id="gCpu">0</span><span class="pts" id="pCpu">0</span></div>
-  <div id="info"></div>
+  <div class="head"><span id="info"></span><span id="state"></span></div>
+  <div class="side you" id="rowYou"><i class="bar"></i><span class="name">You</span><i class="serve" id="sYou" title="Serving"></i><span class="games" id="gYou" title="Games">0</span><b class="pts" id="pYou">0</b></div>
+  <div class="side foe" id="rowFoe"><i class="bar"></i><span class="name" id="foeName">Opponent</span><i class="serve" id="sCpu" title="Serving"></i><span class="games" id="gCpu" title="Games">0</span><b class="pts" id="pCpu">0</b></div>
 </div>
 
 <div id="prompt" role="status" aria-live="polite">

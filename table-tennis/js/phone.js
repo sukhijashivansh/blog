@@ -46,6 +46,7 @@ function connect() {
 
 function lost() {
   conn = null;
+  $('pause').hidden = true;
   status('Lost the game. Reconnecting');
   clearTimeout(retryTimer);
   retryTimer = setTimeout(connect, RETRY_MS);
@@ -75,6 +76,16 @@ function onData(d) {
   if (d.k === 'ping') send({ k: 'pong', t: d.t, p: performance.now() });
   if (d.k === 'buzz') buzz(clamp(d.ms | 0, 5, 200));
   if (d.k === 'menu') showMenu(d);
+  if (d.k === 'theme') setLook(d.v, true);
+}
+
+// light or dark. picking one here sets the game screen too, and the game tells a newly paired phone which it's using
+function setLook(v, keep) {
+  if (v !== 'light' && v !== 'dark') return;
+  document.documentElement.dataset.theme = v;
+  if (keep) store.set('tt.theme', v);
+  document.querySelector('meta[name="theme-color"]').content = v === 'dark' ? '#15181d' : '#f4f5f7';
+  for (const b of document.querySelectorAll('[data-look]')) b.setAttribute('aria-pressed', String(b.dataset.look === v));
 }
 
 // iPhones have no vibration API, but Safari ticks the haptic engine when a switch toggles
@@ -83,7 +94,9 @@ function buzz(ms) {
   else $('tick').click();
 }
 
-function showMenu({ title, sub, items }) {
+// the game says what to show: its question, the buttons that answer it, and whether it can be paused right now
+function showMenu({ title, sub, items, canPause }) {
+  $('pause').hidden = !canPause;
   $('title').textContent = title || 'Playing';
   $('sub').textContent = sub || '';
   $('sub').hidden = !sub;
@@ -187,6 +200,9 @@ $('center').addEventListener('pointerdown', holdStart);
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('center').addEventListener(ev, holdEnd);
 for (const b of document.querySelectorAll('[data-speed]')) b.addEventListener('click', () => setSpeed(b.dataset.speed));
 setSpeed(store.get('tt.speed'));
+for (const b of document.querySelectorAll('[data-look]')) b.addEventListener('click', () => { setLook(b.dataset.look, true); send({ k: 'theme', v: b.dataset.look }); buzz(10); });
+setLook(document.documentElement.dataset.theme, false);
+$('pause').addEventListener('click', () => { send({ k: 'pause' }); buzz(15); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   if (started) keepAwake();

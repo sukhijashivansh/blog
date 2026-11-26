@@ -23,6 +23,8 @@ let view, mode = 'boot', resume = 'play', last = 0, timer = 0, levelId = 2, best
 let gated = true;
 const GATE_WAIT = 12000;
 let lesson = 0, lessonDone = 0, nextIn = 0, sides = { l: false, r: false };
+// paused from the phone's Pause button, so the game waits for Resume however steady the phone is
+let byPlayer = false, wasPaired = false;
 
 // playing a friend online, each at their own laptop with their own phone. the invite link carries this laptop's pairing id, and
 // the friend's laptop connects to it. online is { host, name, here, status, held, holds, quiet, want, wants, route, own } while
@@ -215,6 +217,14 @@ const FLOW = {
     prompts();
   },
   paused(dt, s) {
+    const got = pick([1, 2]);
+    if (got === 2 && resume === 'play') { endMatch(); return; }
+    if (byPlayer) {
+      if (got !== 1) return;
+      byPlayer = false;
+      hud.choices();
+      if (online?.holds || online?.quiet) friendHeld();
+    }
     timer = clamp(timer + (s ? dt : -dt), 0, BACK_AFTER);
     hud.meter(timer / BACK_AFTER);
     // paused for a friend's phone, this one may drop out too, and then they wait for it as well
@@ -416,6 +426,7 @@ function friendTick(now) {
       coinToss();
     } else if (d.k === 'hold') {
       o.holds = !!d.on;
+      o.holdWhy = d.why === 'pause' ? 'pause' : 'phone';
       if (o.holds && (mode === 'play' || mode === 'countdown')) friendHeld();
     } else if (d.k === 'again') o.wants = true;
     else if (d.k === 'leave') { endOnline(`${foe()} left the match`); return; }
@@ -441,19 +452,58 @@ function friendTick(now) {
   }
 }
 
-// playing a friend, the match stops for both whenever either one's phone drops out
-function hold(on) {
+// playing a friend, the match stops for both whenever either one pauses or their phone drops out. why tells the friend which
+function hold(on, why = 'phone') {
   if (!online || !!online.held === on) return;
   online.held = on;
-  versus?.send({ k: 'hold', on });
+  versus?.send({ k: 'hold', on, why });
 }
 
 function friendHeld() {
   resume = 'play';
   mode = 'paused';
   timer = BACK_AFTER;
-  hud.say(online.quiet ? `Waiting for ${foeIn()}\'s connection` : `${foe()}\'s phone dropped out`, 'The match carries on as soon as it\'s back.');
+  if (byPlayer) return;
+  if (online.quiet) hud.say(`Waiting for ${foeIn()}'s connection`, 'The match carries on as soon as it\'s back.');
+  else if (online.holdWhy === 'pause') hud.say(`${foe()} paused the match`, 'It carries on when they tap Resume.');
+  else hud.say(`${foe()}'s phone dropped out`, 'The match carries on as soon as it\'s back.');
 }
+
+// the phone's Pause button
+function pauseByPlayer() {
+  if (mode !== 'play' && mode !== 'coach' && mode !== 'countdown') return;
+  if (mode !== 'countdown') resume = mode;
+  mode = 'paused';
+  byPlayer = true;
+  timer = BACK_AFTER;
+  hold(true, 'pause');
+  hud.meter(0);
+  hud.say('Paused', 'Tap Resume on your phone when you\'re ready.');
+  hud.choices(resume === 'play' ? [{ n: 1, label: 'Resume', note: 'Count back in' }, { n: 2, label: 'End match', note: 'Back to the menu' }]
+    : [{ n: 1, label: 'Resume', note: 'Back to the warm-up' }]);
+}
+
+// leaves the match from the pause menu, with no result
+function endMatch() {
+  byPlayer = false;
+  hud.choices();
+  if (online) { endOnline(); return; }
+  game.phase = 'idle';
+  game.drain();
+  $('board').hidden = true;
+  hud.meter(0);
+  askLevel();
+}
+
+// light or dark: picked on the phone and kept here, or else this computer's own setting, followed as it changes
+const theme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+function setTheme(v, keep) {
+  document.documentElement.dataset.theme = v;
+  if (keep) store.set('tt.theme', v);
+  view?.setTheme(v === 'dark');
+  link.send({ k: 'theme', v });
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { if (!store.get('tt.theme')) setTheme(e.matches ? 'dark' : 'light', false); });
 
 function lostPhone(now) {
   if (now - link.seen <= LOST_AFTER) return false;
@@ -533,6 +583,12 @@ function frame(ms) {
   const now = ms / 1000, real = clamp(now - last, 0, 0.25), dt = Math.min(real, 0.05);
   last = now;
   tapped = link.takeTap();
+  for (const a of link.takeAsks()) {
+    if (a.k === 'pause') pauseByPlayer();
+    else if (a.k === 'theme') setTheme(a.v, true);
+  }
+  // a phone that has just paired is told the look, so it matches
+  if (link.paired !== wasPaired && (wasPaired = link.paired)) link.send({ k: 'theme', v: theme() });
   const state = link.read(now), s = state && state.age < GRACE ? state : null, live = mode === 'play' || mode === 'coach';
   const pose = paddle.tick(real, now, live ? game.assist : null, state);
   if (online) friendTick(now);
@@ -612,7 +668,7 @@ function phoneMenu() {
   if (mode === 'invite') items.push({ n: 0, label: 'Back', note: '' });
   if (mode === 'lobby') items.push({ n: 0, label: 'Leave', note: '' });
   const playing = mode === 'play' || mode === 'countdown';
-  return { title: hud.text.title || (playing ? 'Playing' : ''), sub: hud.text.sub, items };
+  return { title: hud.text.title || (playing ? 'Playing' : ''), sub: hud.text.sub, items, canPause: playing || mode === 'coach' };
 }
 
 function openGate(open) {
