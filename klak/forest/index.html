@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1710">
+<meta name="description" content="A 3D slingshot game in a living forest. Hit the birds and eggs, as long as you like.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Klak Forest">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Klak Forest</title>
+<link rel="modulepreload" href="/forest/three.bundle.js">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: the 3D forest fills the screen; a slim HUD sits on top, a slide track along the bottom, and menu, pause and game over share one centred panel. */
+:root {
+  color-scheme: dark;
+  --pine-deep: #0a1710;
+  --pine: #12261a;
+  --ivory: #f1ead8;
+  --ivory-soft: #d5d4bd;
+  --ivory-dim: #a3ab92;
+  --brass: #d9b76f;
+  --brass-lo: #c39a52;
+  --brass-hi: #eed394;
+  --ember: #f2a444;
+  --ember-hi: #ffd27a;
+  --ink: #17200f;
+  --panel: rgba(10, 23, 16, 0.94);
+  --hair: rgba(217, 183, 111, 0.34);
+  --hair-soft: rgba(217, 183, 111, 0.16);
+  --track: rgba(241, 234, 216, 0.2);
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", Roboto, system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--pine-deep); color: var(--ivory);
+  font-family: var(--body); font-weight: 400;
+  overflow: hidden; overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+button { touch-action: manipulation; }
+#stage { position: fixed; inset: 0; overflow: hidden; background: var(--pine); touch-action: none; }
+#game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+#hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 18px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 22px max(16px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(rgba(6, 14, 9, 0.62), rgba(6, 14, 9, 0));
+  pointer-events: none;
+}
+.stat { min-width: 0; }
+.stat small { display: block; font: 500 10.5px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-soft); }
+.stat b { display: flex; align-items: center; height: 23px; margin-top: 5px; font: 600 23px/1 var(--display); color: var(--ivory); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#hud .stat:first-child { min-width: 70px; }
+#combo { margin-left: 7px; font-size: 14px; color: var(--brass-hi); }
+.meter { display: block; width: 56px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.meter i { display: block; width: 0; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--ember), var(--ember-hi)); }
+.stat.fire.ready small { color: var(--ember-hi); }
+.stat.fire.ready .meter i { animation: glow 0.8s ease-in-out infinite alternate; }
+@keyframes glow { from { opacity: 0.55; } to { opacity: 1; } }
+.spacer { flex: 1; }
+.icon-btn {
+  pointer-events: auto; padding: 0; flex: none;
+  width: 44px; height: 44px; border-radius: 11px;
+  border: 1px solid var(--hair); background: rgba(8, 18, 12, 0.55); color: var(--ivory);
+  display: grid; place-items: center; cursor: pointer;
+}
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn:focus-visible, .btn:focus-visible, .ghost:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+@media (max-width: 390px) { #hud { gap: 11px; } #hud .stat:first-child { min-width: 56px; } .meter { width: 42px; } }
+@media (max-width: 340px) { #hud { gap: 8px; } .meter { width: 34px; } }
+
+#track {
+  position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(72vw, 420px); height: 4px; border-radius: 2px; background: var(--track); pointer-events: none;
+}
+#thumb { position: absolute; top: -6px; left: 50%; width: 34px; height: 16px; margin-left: -17px; border-radius: 8px; background: var(--brass-hi); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); }
+#hint {
+  position: absolute; left: 16px; right: 16px; bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 26px);
+  text-align: center; font: 500 14px/1.3 var(--display); letter-spacing: 0.08em; color: var(--ivory);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); pointer-events: none; transition: opacity 0.3s;
+}
+#crosshair {
+  position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none;
+  background: radial-gradient(circle, var(--ivory) 0 2px, transparent 2.5px),
+    linear-gradient(var(--ivory), var(--ivory)) center top / 2px 6px no-repeat, linear-gradient(var(--ivory), var(--ivory)) center bottom / 2px 6px no-repeat,
+    linear-gradient(var(--ivory), var(--ivory)) left center / 6px 2px no-repeat, linear-gradient(var(--ivory), var(--ivory)) right center / 6px 2px no-repeat;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+#fireBtn {
+  position: absolute; right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(22px, env(safe-area-inset-bottom, 0px));
+  width: 88px; height: 88px; border-radius: 50%; border: 2px solid var(--brass-hi); cursor: pointer; touch-action: none;
+  background: rgba(8, 18, 12, 0.5); color: var(--ivory); font: 600 15px/1 var(--display); letter-spacing: 0.16em; text-transform: uppercase;
+}
+#fireBtn:active { background: rgba(217, 183, 111, 0.35); }
+#fps {
+  position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px); pointer-events: none;
+  padding: 3px 7px; border-radius: 6px; background: rgba(6, 14, 9, 0.55); color: var(--ivory-soft);
+  font: 500 12px/1 var(--display); letter-spacing: 0.08em; font-variant-numeric: tabular-nums;
+}
+#banner {
+  position: absolute; top: 19%; left: 0; right: 0; text-align: center; pointer-events: none; opacity: 0;
+  font: 600 30px/1 var(--display); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ivory);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
+}
+#pops { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#pops span {
+  position: absolute; top: 0; left: 0; white-space: nowrap;
+  font: 600 20px/1 var(--display); letter-spacing: 0.04em; color: var(--ivory);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); opacity: 0; will-change: transform, opacity;
+}
+#pops span.gold { color: var(--ember-hi); font-size: 25px; }
+#pops span.bank { color: #bfe9a0; }
+#hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(120, 44, 12, 0) 58%, rgba(120, 44, 12, 0.72) 100%); }
+
+#overlay {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(5, 12, 8, 0.34);
+}
+.card {
+  width: 100%; max-width: 398px;
+  background: var(--panel); border: 1px solid var(--hair); border-radius: 14px;
+  padding: 24px 22px 20px; display: grid; gap: 15px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.card h1 {
+  margin: 0; padding-bottom: 13px; border-bottom: 1px solid var(--hair);
+  font: 600 24px/1.15 var(--display); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ivory); text-wrap: balance;
+}
+.card p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ivory-soft); }
+.how { margin: 0; display: grid; gap: 9px; }
+.how div { display: grid; grid-template-columns: 50px 1fr; column-gap: 10px; align-items: baseline; }
+.how dt { font: 600 11px/1.4 var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--brass); }
+.how dd { margin: 0; min-width: 0; font-size: 14px; line-height: 1.42; color: var(--ivory-soft); }
+.how .hot dt { color: var(--ember); }
+.legend {
+  list-style: none; margin: 0; padding: 12px 0; border-top: 1px solid var(--hair-soft); border-bottom: 1px solid var(--hair-soft);
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.legend li { display: grid; justify-items: center; gap: 5px; text-align: center; font: 500 12.5px/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ivory); }
+.legend canvas { width: 46px; height: 46px; }
+.legend small { display: block; margin-top: 2px; font: 400 12px/1.3 var(--body); letter-spacing: 0; text-transform: none; color: var(--ivory-dim); }
+.btn {
+  width: 100%; min-height: 48px; padding: 15px 20px; border: 0; border-radius: 9px; cursor: pointer;
+  font: 600 15px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink);
+  background: linear-gradient(var(--brass-hi), var(--brass-lo));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+.btn:active { filter: brightness(0.88); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.ghost {
+  display: grid; place-items: center; width: 100%; min-height: 44px; padding: 12px 10px; border: 1px solid var(--hair); border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--ivory-soft); text-decoration: none;
+  font: 500 13px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.ghost:active { background: var(--hair-soft); }
+.set { display: grid; gap: 8px; }
+.set > span { font: 500 11px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-dim); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.seg button {
+  min-height: 42px; padding: 10px 6px; border: 1px solid var(--hair); border-radius: 9px; cursor: pointer; background: transparent;
+  color: var(--ivory-soft); font: 500 13px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase;
+}
+.seg button[aria-pressed="true"] { background: var(--brass); border-color: var(--brass); color: var(--ink); }
+.seg button:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.note { margin: 0; min-height: 1.4em; font-size: 13px; color: var(--ember-hi); }
+.best { font-size: 13px; color: var(--ivory-dim); text-align: center; }
+.best:empty { display: none; }
+.final { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.final .stat b { height: 30px; font-size: 30px; }
+@media (max-height: 700px) {
+  .card { padding: 16px 18px 14px; gap: 10px; }
+  .card h1 { font-size: 21px; padding-bottom: 9px; }
+  .card p { font-size: 14px; line-height: 1.38; }
+  .how { gap: 5px; }
+  .how dd { font-size: 13px; line-height: 1.34; }
+  .legend { padding: 8px 0; }
+  .legend canvas { width: 36px; height: 36px; }
+  .btn { padding: 13px 20px; }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .card#menuCard { max-width: 680px; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+  #menuCard h1, #menuCard > p { grid-column: 1 / -1; }
+  #menuCard > p { display: none; }
+  #menuCard .how { grid-row: 2 / span 4; }
+}
+@media (prefers-reduced-motion: reduce) { .stat.fire.ready .meter i { animation: none; } }
+</style>
+
+<div id="stage">
+  <canvas id="game" aria-label="Klak Forest, a 3D slingshot game"></canvas>
+  <div id="pops" aria-hidden="true"></div>
+  <div id="hurt" aria-hidden="true"></div>
+  <div id="banner" role="status"></div>
+
+  <div id="hud" hidden>
+    <div class="stat"><small>Score</small><b><span id="score">0</span><span id="combo" hidden></span></b></div>
+    <div class="stat"><small>Level</small><b id="level">1</b></div>
+    <div class="stat fire" id="fireStat"><small id="fireLabel">Fire</small><b><span class="meter" id="fireMeter" role="progressbar" aria-label="Fireball charge" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><i id="fireFill"></i></span></b></div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="pauseBtn" type="button" aria-label="Pause">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8.5 6v12M15.5 6v12"/></svg>
+    </button>
+  </div>
+
+  <div id="track" hidden><div id="thumb"></div></div>
+  <div id="crosshair" hidden aria-hidden="true"></div>
+  <button id="fireBtn" type="button" hidden aria-label="Hold to draw, let go to shoot">Fire</button>
+  <div id="fps" hidden aria-hidden="true"></div>
+  <div id="hint" hidden></div>
+
+  <div id="overlay">
+    <div class="card" id="menuCard">
+      <h1>Klak Forest</h1>
+      <p>Birds cut through the trees and eggs fly loose. No clock, no rush: play as long as you like.</p>
+      <dl class="how">
+        <div><dt>Pull</dt><dd>Drag back and let go. Stones drop with distance, so lead your target.</dd></div>
+        <div><dt>Move</dt><dd>Tilt your phone, slide the bottom track, or use the arrow keys.</dd></div>
+        <div><dt>Bank</dt><dd>Bounce a stone off a tree trunk. A bank hit scores double.</dd></div>
+        <div class="hot"><dt>Fire</dt><dd>Every 8 hits load a fireball that blasts everything near it.</dd></div>
+      </dl>
+      <ul class="legend">
+        <li><canvas data-icon="finch" width="128" height="128"></canvas><span>Parrot<small>10</small></span></li>
+        <li><canvas data-icon="swift" width="128" height="128"></canvas><span>Flamingo<small>25, jinks</small></span></li>
+        <li><canvas data-icon="raven" width="128" height="128"></canvas><span>Stork<small>40, 2 hits</small></span></li>
+        <li><canvas data-icon="gold" width="128" height="128"></canvas><span>Gold egg<small>60</small></span></li>
+      </ul>
+      <button class="btn" id="playBtn" type="button" disabled>Growing the forest</button>
+      <div class="row">
+        <button class="ghost sound-toggle" type="button">Sound on</button>
+        <button class="ghost tilt-toggle" type="button" hidden>Tilt on</button>
+        <button class="ghost set-open" type="button">Settings</button>
+        <a class="ghost" href="https://klak.shivanshsukhija.com/">Classic</a>
+      </div>
+      <div class="best" id="menuBest"></div>
+    </div>
+
+    <div class="card" id="pauseCard" hidden>
+      <h1>Paused</h1>
+      <button class="btn" id="resumeBtn" type="button">Resume</button>
+      <button class="ghost" id="endBtn" type="button">End game</button>
+      <div class="row">
+        <button class="ghost sound-toggle" type="button">Sound on</button>
+        <button class="ghost tilt-toggle" type="button" hidden>Tilt on</button>
+        <button class="ghost set-open" type="button">Settings</button>
+      </div>
+    </div>
+
+    <div class="card" id="setCard" hidden>
+      <h1>Settings</h1>
+      <div class="set"><span>View</span><div class="seg" data-set="mode"><button type="button" data-v="classic">Slingshot</button><button type="button" data-v="fps">First person</button></div></div>
+      <div class="set"><span>Quality</span><div class="seg" data-set="q"><button type="button" data-v="0">Low</button><button type="button" data-v="1">Medium</button><button type="button" data-v="2">High</button></div></div>
+      <div class="set"><span>FPS counter</span><div class="seg" data-set="fps"><button type="button" data-v="0">Off</button><button type="button" data-v="1">On</button></div></div>
+      <p class="note" id="setNote" role="status"></p>
+      <button class="btn" id="setDone" type="button">Done</button>
+    </div>
+
+    <div class="card" id="overCard" hidden>
+      <h1>Round over</h1>
+      <div class="final">
+        <div class="stat"><small>Score</small><b id="finalScore">0</b></div>
+        <div class="stat"><small>Level</small><b id="finalLevel">1</b></div>
+        <div class="stat"><small>Best</small><b id="finalBest">0</b></div>
+      </div>
+      <p id="overNote"></p>
+      <button class="btn" id="againBtn" type="button">Play again</button>
+    </div>
+
+    <div class="card" id="failCard" hidden>
+      <h1>No 3D here</h1>
+      <p>This browser could not start WebGL, which Klak Forest needs. The classic game still works.</p>
+      <a class="btn" href="https://klak.shivanshsukhija.com/" style="display:grid;place-items:center;text-decoration:none">Play classic Klak</a>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/forest/game.js"></script>
