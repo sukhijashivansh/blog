@@ -10,6 +10,7 @@ Third-party assets and libraries bundled with the 3D game.
 | Sky HDRI "Kloofendal 48d Partly Cloudy (Pure Sky)" | `tex/sky.hdr` | Poly Haven | CC0 |
 | Forest ground, bark, rock textures (`forrest_ground_01`, `bark_brown_02`, `rock_boulder_dry`) | `tex/ground_*`, `tex/bark_*`, `tex/rock_*` | Poly Haven | CC0 |
 | Slingshot wood (`ash_veneer`) and pouch leather normal map (`brown_leather`) | `tex/wood_*`, `tex/leather_nor.webp` | Poly Haven | CC0 |
-| Leaf photos (LeafSet024 beech, LeafSet010 maple), arranged into `tex/leaves.webp` | `tex/leaves.webp` | ambientCG | CC0 |
+| Grass clump and wildflower models (white, yellow, blue) from the EZ-Tree demo app | `models/grass.glb`, `models/flower_*.glb` | https://github.com/dgreenheck/ez-tree, Daniel Greenheck | MIT |
+| EZ-Tree 1.1.0 (procedural trees and bushes) and its oak and ash twig textures | `vendor/ez-tree/`, `tex/leaf_oak.webp`, `tex/leaf_ash.webp` | https://github.com/dgreenheck/ez-tree, Daniel Greenheck | MIT |
 
 `vendor/postprocessing-stub.js` is ours: it stands in for the pmndrs `postprocessing` package that N8AO imports but this game doesn't use.

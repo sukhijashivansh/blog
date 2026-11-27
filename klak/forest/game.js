@@ -1,6 +1,7 @@
 import * as THREE from './three.bundle.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { HDRLoader } from './vendor/HDRLoader.js';
+import { Tree } from './vendor/ez-tree/tree.js';
 const { EffectComposer, RenderPass, OutputPass, mergeGeometries } = THREE;
 
 const $ = id => document.getElementById(id);
@@ -32,9 +33,9 @@ const groundH = (x, z) => {
 
 /* ---------- quality: picked from the device, stepped down at runtime if frames run long ---------- */
 const QUALITY = [
-  { dpr: 1.25, leaves: 0.42, grass: 2000, shadow: 0, post: false, samples: 0 },
-  { dpr: 1.6, leaves: 0.58, grass: 4800, shadow: 1024, post: false, samples: 0 },
-  { dpr: 2, leaves: 1, grass: 9500, shadow: 2048, post: true, samples: 4 },
+  { dpr: 1.25, leaves: 0.42, grass: 1400, meadow: 13000, shadow: 0, post: false, samples: 0 },
+  { dpr: 1.6, leaves: 0.58, grass: 2800, meadow: 20000, shadow: 1024, post: false, samples: 0 },
+  { dpr: 2, leaves: 1, grass: 4500, meadow: 30000, shadow: 2048, post: true, samples: 4 },
 ];
 const coarse = matchMedia('(pointer: coarse)').matches, cores = navigator.hardwareConcurrency || 4, memory = navigator.deviceMemory || 4;
 const savedTier = store.get('klak.forest.q');
@@ -137,8 +138,8 @@ async function loadWorld() {
     scene.background = t; scene.backgroundIntensity = 0.85; scene.environmentIntensity = 0.5; skyDome.visible = false;
   }, () => {});
   await Promise.all([sky_, tex('ground_diff', true, [110, 110]), tex('ground_nor', false, [110, 110]), tex('ground_rough', false, [110, 110]),
-    tex('bark_diff', true, [2, 6]), tex('bark_nor', false, [2, 6]), tex('rock_diff', true), tex('rock_nor', false), tex('leaves', true),
-    tex('wood_diff', true, [2, 1]), tex('wood_rough', false, [2, 1]), tex('leather_nor', false)]);
+    tex('bark_diff', true, [2, 6]), tex('bark_nor', false, [2, 6]), tex('rock_diff', true), tex('rock_nor', false),
+    tex('leaf_oak', true), tex('leaf_ash', true), tex('wood_diff', true, [2, 1]), tex('wood_rough', false, [2, 1]), tex('leather_nor', false)]);
 }
 
 const shared = { time: { value: 0 }, sunView: { value: new THREE.Vector3() }, sunCol: { value: new THREE.Color() }, rim: { value: new THREE.Color() }, gust: { value: 0 }, windAmp: { value: reduceMotion ? 0.3 : 1 }, blast: { value: new THREE.Vector4() }, lit: { value: new THREE.Color(1, 1, 1) } };
@@ -244,6 +245,10 @@ const WIND_BODY = {                                 // gusts roll through as a t
   frame: `float g = gustFront(wp.xz), w1 = sin(uTime * 1.6 + aPhase * 6.28), w2 = sin(uTime * 2.9 + aPhase * 11.0);
     float twist = sin(uTime * (4.0 + aPhase * 3.0) + aPhase * 40.0) * (0.012 + 0.05 * g + 0.03 * uGust);
     wp.xyz += (vec3(w1 + 0.5 * w2, 0.4 * w2, 0.6 * w1) * (0.012 + 0.02 * g + 0.018 * uGust) + aN * (uv.x - 0.5) * twist) * uWindAmp;`,
+  clump: `float g = gustFront(wp.xz), bend = clamp(position.y, 0.0, 1.0); bend *= bend; float s = sin(uTime * 1.7 + aPhase * 6.28 + dot(wp.xz, WIND_DIR) * 0.5);
+    wp.xz += WIND_DIR * (0.05 * s + (0.14 + 0.12 * uGust) * g) * bend * uWindAmp;
+    wp.y -= 0.06 * g * bend * uWindAmp;
+    wp.xyz += blastPush(wp.xyz) * 0.6 * bend;`,
   grass: `float g = gustFront(wp.xz), bend = uv.y * uv.y, s = sin(uTime * 1.7 + aPhase * 6.28 + dot(wp.xz, WIND_DIR) * 0.5);
     wp.xz += WIND_DIR * (0.035 * s + (0.1 + 0.09 * uGust) * g) * bend * uWindAmp;
     wp.y -= 0.05 * g * bend * uWindAmp;
@@ -269,6 +274,30 @@ function windify(mat, kind) {
         #include <opaque_fragment>`);
   };
   mat.customProgramCacheKey = () => 'klak-' + kind;
+  return mat;
+}
+function leafLight(sh) {                            // leaves: lit from their crown's centre, no sheen, sun glowing through from behind
+  Object.assign(sh.uniforms, { uSunView: shared.sunView, uSunCol: shared.sunCol });
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform vec3 uSunView; uniform vec3 uSunCol;')
+    .replace('#include <normal_fragment_begin>', 'float faceDirection = 1.0; vec3 normal = normalize(vNormal); vec3 nonPerturbedNormal = normal;')
+    .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n material.specularColor *= 0.12; material.specularF90 *= 0.12;')
+    .replace('#include <opaque_fragment>', `outgoingLight += diffuseColor.rgb * diffuseColor.rgb * uSunCol * pow(max(dot(-normalize(vViewPosition), uSunView), 0.0), 4.0) * 0.5;
+      #include <opaque_fragment>`);
+}
+function canopyify(mat) {                           // EZ-Tree crowns: lean with the trunk, and every twig flutters on its own
+  mat.onBeforeCompile = sh => {
+    windUniforms(sh); leafLight(sh);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\n' + WIND_GLSL)
+      .replace('#include <project_vertex>', `vec4 wp = instanceMatrix * vec4(transformed, 1.0);
+        wp = modelMatrix * wp;
+        float g = gustFront(wp.xz), f = sin(uTime * 2.6 + dot(wp.xyz, vec3(0.9, 0.6, 0.7))) + 0.5 * sin(uTime * 4.1 + dot(wp.xyz, vec3(-0.5, 1.1, 0.8)));
+        wp.xyz += treeSway(wp.xyz) + vec3(f, 0.45 * f, 0.7 * f) * (0.035 + 0.07 * g + 0.05 * uGust) * uWindAmp + blastPush(wp.xyz) * 0.35 * clamp(wp.y / 18.0, 0.0, 1.0);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;`);
+  };
+  mat.customProgramCacheKey = () => 'klak-canopy';
   return mat;
 }
 function swayify(mat) {                             // trunks, limbs and nests lean with the crowns they carry
@@ -302,48 +331,13 @@ function addRim(mat) {                              // a thin light edge keeps t
 
 /* ---------- the forest ---------- */
 const trunks = [], nests = [];
-let leafTex, barkMat, leafMat, frameMat, leafMeshes = [], grassMesh, frameMesh, frameItems = [], fallLeaves, fallData = [], fireflies, shafts = [];
+let leafTex, barkMat, frameMat, leafMeshes = [], grassMesh, meadowMesh, frameMesh, frameItems = [], fallLeaves, fallData = [], fireflies, shafts = [];
 const GREENS = hex('#2f7d32', '#3f9440', '#1f6a35', '#5aa53a', '#2a8a4a', '#74b13c', '#1a5c30');
 const HERO = [[-11.5, -23, 25, 1.05], [11, -27, 27, 1.15], [-7.6, -42, 28, 1.2], [7.2, -44, 26, 1.1], [-17, -39, 30, 1.3], [17, -37, 28, 1.25]];
 
-function leafInstances(items) {
-  const n = items.length, g = new THREE.PlaneGeometry(1, 1), aN = new Float32Array(n * 3), aP = new Float32Array(n);
-  const mesh = new THREE.InstancedMesh(g, leafMat, n);
-  for (let i = n - 1; i > 0; i--) { const j = Math.floor(srnd() * (i + 1)), t = items[i]; items[i] = items[j]; items[j] = t; }   // shuffled, so a lower count thins evenly
-  items.forEach((it, i) => { mesh.setMatrixAt(i, it.m); mesh.setColorAt(i, it.c); aN.set(it.n, i * 3); aP[i] = it.p; });
-  g.setAttribute('aN', new THREE.InstancedBufferAttribute(aN, 3)); g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(aP, 1));
-  mesh.frustumCulled = false;
-  leafMeshes.push(mesh); scene.add(mesh);
-  return mesh;
-}
-function crown(out, cx, cy, cz, R, cards, base) {
-  const p = new THREE.Vector3(), d = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), z = new THREE.Vector3(0, 0, 1);
-  for (let i = 0; i < cards; i++) {
-    const u = srnd(-0.55, 1), a = srnd(0, Math.PI * 2), h = Math.sqrt(1 - u * u);
-    d.set(h * Math.cos(a), u, h * Math.sin(a));
-    p.set(cx, cy, cz).addScaledVector(d, R * srnd(0.55, 1.02));
-    q.setFromUnitVectors(z, d); q2.setFromAxisAngle(z, srnd(0, 6.28)); q.multiply(q2);
-    q2.setFromAxisAngle(V.set(srnd(-1, 1), srnd(-1, 1), 0).normalize(), srnd(-0.6, 0.6)); q.multiply(q2);
-    const w = R * srnd(0.72, 1.12); s.set(w, w, w);
-    const shade = lerp(0.48, 1.16, (u + 0.55) / 1.55) * srnd(0.82, 1.12);
-    const c = (TEX.leaves ? new THREE.Color(1, 1, 1).lerp(base, srnd(0.1, 0.3)).multiplyScalar(0.92) : base.clone().lerp(pick(GREENS), srnd(0, 0.4))).multiplyScalar(shade);
-    const n = [d.x * 0.8, d.y * 0.8 + 0.4, d.z * 0.8], l = Math.hypot(...n);
-    out.push({ m: new THREE.Matrix4().compose(p, q, s), c, n: [n[0] / l, n[1] / l, n[2] / l], p: srnd() });
-  }
-}
-function tree(list, nearList, x, z, h, r, near) {
-  const y = groundH(x, z) - 0.15, yaw = srnd(0, 6.28), base = GREENS[Math.floor(srnd(0, GREENS.length))];
-  const q = new THREE.Quaternion().setFromEuler(E0.set(srnd(-0.035, 0.035), yaw, srnd(-0.035, 0.035)));
-  list.push(new THREE.Matrix4().compose(V.set(x, y, z), q, V2.set(r, h, r)));
-  const blobs = near ? 9 : 5, out = near ? nearList.near : nearList.far, cards = Math.round((near ? 52 : 34) * Q.leaves);
-  for (let i = 0; i < blobs; i++) {
-    const t = i / (blobs - 1), a = srnd(0, 6.28) + i * 2.4, sp = h * lerp(0.26, 0.05, t) * srnd(0.75, 1.1), R = h * lerp(0.19, 0.13, t) * srnd(0.9, 1.2);
-    crown(out, x + Math.cos(a) * sp, y + h * lerp(0.58, 1.02, t), z + Math.sin(a) * sp, R, cards, base);
-  }
-}
 function buildGround(bark) {
   const size = 360, g = new THREE.PlaneGeometry(size, size, 170, 170); g.rotateX(-Math.PI / 2); g.translate(0, 0, -70);
-  const real = !!TEX.ground_diff, P = g.attributes.position, col = new Float32Array(P.count * 3), [a, b, dirt, moss] = real ? hex('#a7ad86', '#94a56c', '#8f765c', '#7f9a62') : hex('#2f5a24', '#5b7f2e', '#6f5636', '#1d4a2a');
+  const real = !!TEX.ground_diff, P = g.attributes.position, col = new Float32Array(P.count * 3), [a, b, dirt, moss] = real ? hex('#93ad6c', '#7fa055', '#8f765c', '#6f9452') : hex('#2f5a24', '#5b7f2e', '#6f5636', '#1d4a2a');
   for (let i = 0; i < P.count; i++) {
     const x = P.getX(i), z = P.getZ(i); P.setY(i, groundH(x, z));
     const n = fbm(x * 0.09, z * 0.09), path = 1 - sstep(1.2, 4.6, Math.abs(x - Math.sin(z * 0.06) * 3.2) + (n - 0.5) * 3);
@@ -375,57 +369,96 @@ function buildGround(bark) {
   }
   scene.add(hills);
 }
-function buildTrees() {
-  const tg = new THREE.CylinderGeometry(0.56, 1, 1, 12, 8, true); tg.translate(0, 0.5, 0);
-  const bark = barkTexture();
-  const shape = (g, flare) => {
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), a = Math.atan2(z, x);
-      const k = 1 + (flare ? 0.75 * Math.exp(-y * 16) * (0.7 + 0.5 * Math.sin(a * 5)) : 0) + 0.06 * Math.sin(y * 14 + a * 3);
-      p.setXYZ(i, x * k + Math.sin(y * 3) * 0.3 * y, y, z * k + Math.cos(y * 2.4) * 0.22 * y);
-    }
-    g.computeVertexNormals();
-  };
-  shape(tg, true);
-  const parts = [tg];
-  for (const [ang, at, len] of [[0.6, 0.6, 0.3], [2.8, 0.68, 0.26], [4.6, 0.76, 0.22], [1.7, 0.84, 0.18]]) {
-    const b = new THREE.CylinderGeometry(0.1, 0.3, len * 7, 7, 2, true); b.translate(0, len * 3.5, 0);
-    b.applyMatrix4(M0.makeRotationFromEuler(E0.set(0, ang, 1.02)));
-    b.scale(1, 0.15, 1); b.translate(0, at, 0); parts.push(b);
+const BUSH_KINDS = [{ preset: 'Bush 2', seed: 1203, leaf: 'oak', tint: 0xeef5dc, leafK: 1.6 }, { preset: 'Bush 1', seed: 860, leaf: 'ash', tint: 0xf4fae8 }];
+const TREE_KINDS = [                                // EZ-Tree presets (MIT, Daniel Greenheck): real branching, photographed twigs
+  { preset: 'Oak Large', seed: 23399, leaf: 'oak', tint: 0xffffff }, { preset: 'Oak Large', seed: 5521, leaf: 'oak', tint: 0xf4f8e8 },
+  { preset: 'Ash Large', seed: 9172, leaf: 'ash', tint: 0xffffff }, { preset: 'Oak Medium', seed: 771, leaf: 'oak', tint: 0xf0f4e0 }, { preset: 'Ash Medium', seed: 3307, leaf: 'ash', tint: 0xf8fbef },
+];
+function growTree(k, detail) {                      // lower detail: fewer, larger twigs and coarser limbs
+  const t = new Tree(); t.loadPreset(k.preset); const o = t.options; o.seed = k.seed;
+  const thin = lerp(0.5, 1, detail);
+  o.leaves.count = Math.max(3, Math.round(o.leaves.count * thin * (k.leafK || 1))); o.leaves.size *= 1 + (1 - thin) * 0.6;
+  for (const l in o.branch.sections) { o.branch.sections[l] = Math.max(2, Math.round(o.branch.sections[l] * lerp(0.5, 1, detail))); o.branch.segments[l] = Math.max(3, Math.round(o.branch.segments[l] * lerp(0.55, 1, detail))); }
+  t.generate();
+  const branches = t.branchesMesh.geometry, leaves = t.leavesMesh.geometry;
+  branches.computeBoundingBox(); leaves.computeBoundingBox();
+  const c = leaves.boundingBox.getCenter(new THREE.Vector3()), p = leaves.attributes.position, n = leaves.attributes.normal;
+  for (let i = 0; i < p.count; i++) {               // each twig faces out from the crown's middle, so the canopy shades like one rounded mass
+    V.set(p.getX(i) - c.x, (p.getY(i) - c.y) * 0.8, p.getZ(i) - c.z).normalize(); V.y += 0.35; V.normalize(); n.setXYZ(i, V.x, V.y, V.z);
   }
-  const trunkGeo = mergeGeometries(parts);
-  barkMat = swayify(new THREE.MeshStandardMaterial({ map: TEX.bark_diff || bark, normalMap: TEX.bark_nor || null, roughness: 0.95, metalness: 0 }));
-
-  const mats = [], store_ = { near: [], far: [] };
-  HERO.forEach(([x, z, h, r]) => { tree(mats, store_, x, z, h, r, true); trunks.push({ x, z, r: r * 1.12, top: groundH(x, z) + h * 0.72 }); });
-  const placed = HERO.map(([x, z]) => [x, z]);
-  for (let tries = 0; tries < 1800 && placed.length < 120; tries++) {
+  return { branches, leaves, height: Math.max(branches.boundingBox.max.y, leaves.boundingBox.max.y) };
+}
+function impostor(branches, branchMat, leaves, leafMat) {   // the grown tree, photographed once from the side for the far forest
+  const box = new THREE.Box3().setFromBufferAttribute(leaves.attributes.position).union(branches.boundingBox);
+  const w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z), h = box.max.y, S = tier === 2 ? 512 : 256;
+  const SH = Math.round(S * h / w), rt = new THREE.WebGLRenderTarget(S, SH);
+  const s2 = new THREE.Scene(), cam = new THREE.OrthographicCamera(-w / 2, w / 2, h, 0, -w * 2, w * 2), lit = new THREE.DirectionalLight(sun.color, sun.intensity);
+  s2.environment = scene.environment; s2.environmentIntensity = scene.environmentIntensity; lit.position.copy(sky.dir).setZ(Math.abs(sky.dir.z) + 0.4);
+  s2.add(new THREE.Mesh(branches, branchMat), new THREE.Mesh(leaves, leafMat), lit, new THREE.HemisphereLight(hemi.color, hemi.groundColor, hemi.intensity));
+  cam.position.set((box.max.x + box.min.x) / 2, 0, w); cam.lookAt(cam.position.x, 0, 0);
+  const clear = renderer.getClearColor(new THREE.Color()), alpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(s2, cam); renderer.setRenderTarget(null); renderer.setClearColor(clear, alpha);
+  const px = new Uint8Array(S * SH * 4); renderer.readRenderTargetPixels(rt, 0, 0, S, SH, px); rt.dispose();     // copied out, so no render target lingers
+  const map = new THREE.DataTexture(px, S, SH); map.generateMipmaps = true; map.minFilter = THREE.LinearMipmapLinearFilter; map.magFilter = THREE.LinearFilter; map.needsUpdate = true;
+  const cards = mergeGeometries([0, Math.PI / 2].map(a => { const p = new THREE.PlaneGeometry(w, h); p.translate(0, h / 2, 0); p.rotateY(a); return p; }));
+  return { cards, map };
+}
+function buildTrees() {
+  const bark = barkTexture();
+  // every species is grown once (two levels of detail) and instanced wherever it stands
+  const kinds = TREE_KINDS.map(k => ({ ...k, near: [], far: [] })), place = (x, z, h, hero) => {
+    const k = kinds[hero ? hero % 3 : Math.floor(srnd(0, kinds.length))], y = groundH(x, z) - 0.3;
+    const m = new THREE.Matrix4().compose(V.set(x, y, z), Q0.setFromEuler(E0.set(srnd(-0.03, 0.03), srnd(0, TAU), srnd(-0.03, 0.03))), V2.setScalar(1));
+    const near = hero || (Math.abs(x) < 46 && z > -86);
+    (near ? k.near : k.far).push({ m, h });
+    return k;
+  };
+  HERO.forEach(([x, z, h], i) => { place(x, z, h, i + 1); trunks.push({ x, z, r: 1.15, top: groundH(x, z) + h * 0.6 }); });
+  const placed = HERO.map(([x, z]) => [x, z]), count = Math.round(lerp(60, 120, Q.leaves));
+  for (let tries = 0; tries < 1800 && placed.length < count; tries++) {
     const x = srnd(-96, 96), z = srnd(-150, 16);
     if (Math.abs(x) < 15 && z > -48) continue;
     if (Math.abs(x) < 6.5 && z > -80) continue;              // leave a window of sky down the path
-    if (placed.some(([a, b]) => Math.hypot(a - x, b - z) < 5.6)) continue;
+    if (placed.some(([a, b]) => Math.hypot(a - x, b - z) < 6.2)) continue;
     placed.push([x, z]);
-    const near = Math.abs(x) < 42 && z > -82, h = srnd(19, 33), r = h * srnd(0.033, 0.05);
-    tree(mats, store_, x, z, h, r, near);
-    if (near && z > -60) trunks.push({ x, z, r: r * 1.12, top: groundH(x, z) + h * 0.72 });
+    const h = srnd(19, 31); place(x, z, h, 0);
+    if (Math.abs(x) < 42 && z > -60) trunks.push({ x, z, r: 0.95, top: groundH(x, z) + h * 0.6 });
   }
-  const tm = new THREE.InstancedMesh(trunkGeo, barkMat, mats.length);
-  mats.forEach((m, i) => { tm.setMatrixAt(i, m); tm.setColorAt(i, C0.setHSL(0.08, 0.14, TEX.bark_diff ? srnd(0.68, 0.92) : srnd(0.46, 0.7))); });
-  tm.castShadow = tm.receiveShadow = true; tm.frustumCulled = false; scene.add(tm);
-
+  const barkTex = TEX.bark_diff ? TEX.bark_diff.clone() : bark, barkNor = TEX.bark_nor ? TEX.bark_nor.clone() : null;
+  for (const t of [barkTex, barkNor]) if (t) { t.repeat.set(1, 0.12); t.needsUpdate = true; }
+  barkMat = swayify(new THREE.MeshStandardMaterial({ map: barkTex, normalMap: barkNor, color: 0xd8cdbd, roughness: 0.95, metalness: 0 }));
+  const flat = new THREE.MeshStandardMaterial({ map: barkTex, color: 0xd8cdbd, roughness: 0.95 });
+  for (const k of kinds) {
+    const { branches, leaves, height } = growTree(k, lerp(0.25, 1, Q.leaves));
+    const leafMatK = canopyify(new THREE.MeshStandardMaterial({ map: TEX['leaf_' + k.leaf] || leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8, metalness: 0, color: k.tint }));
+    const scaled = (it, sc = it.h / height) => M0.copy(it.m).multiply(new THREE.Matrix4().makeScale(sc, sc, sc));
+    if (k.near.length) {
+      const bm = new THREE.InstancedMesh(branches, barkMat, k.near.length), lm = new THREE.InstancedMesh(leaves, leafMatK, k.near.length);
+      k.near.forEach((it, n) => { scaled(it); bm.setMatrixAt(n, M0); lm.setMatrixAt(n, M0); lm.setColorAt(n, C0.setHSL(0.24, 0.12, srnd(0.82, 1))); });
+      bm.castShadow = bm.receiveShadow = true; lm.castShadow = Q.shadow > 0;
+      bm.frustumCulled = lm.frustumCulled = false; scene.add(bm, lm); leafMeshes.push(lm);
+    }
+    if (k.far.length) {                             // behind the haze a tree is two crossed cards of its own photograph
+      const im = impostor(branches, flat, leaves, new THREE.MeshStandardMaterial({ map: leafMatK.map, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8, color: k.tint }));
+      const fm = new THREE.InstancedMesh(im.cards, new THREE.MeshBasicMaterial({ map: im.map, alphaTest: 0.5, side: THREE.DoubleSide }), k.far.length);
+      k.far.forEach((it, n) => { scaled(it); fm.setMatrixAt(n, M0); fm.setColorAt(n, C0.setScalar(srnd(0.85, 1))); });
+      fm.frustumCulled = false; scene.add(fm);
+    }
+  }
   leafTex = leafTexture();
-  leafMat = windify(new THREE.MeshStandardMaterial({ map: TEX.leaves || leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), 'leaf');
-  const near = leafInstances(store_.near); near.castShadow = Q.shadow > 0; near.receiveShadow = false;
-  leafInstances(store_.far);
 
-  // bushes hugging the clearing
-  const bushes = [];
-  for (let i = 0; i < 44; i++) {
-    const side = srnd() < 0.5 ? -1 : 1, x = side * srnd(7, 34), z = srnd(-58, 8), R = srnd(1.1, 2.5);
-    crown(bushes, x, groundH(x, z) + R * 0.62, z, R, Math.round(26 * Q.leaves), GREENS[i % GREENS.length]);
-  }
-  leafInstances(bushes);
+  // bushes hugging the clearing: EZ-Tree shrubs in the same twigs
+  BUSH_KINDS.forEach((k, bi) => {
+    const { branches, leaves, height } = growTree(k, lerp(0.4, 1, Q.leaves)), n = Math.round(lerp(10, 22, Q.leaves));
+    const mat = canopyify(new THREE.MeshStandardMaterial({ map: TEX['leaf_' + k.leaf] || leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8, metalness: 0, color: k.tint }));
+    const bm = new THREE.InstancedMesh(branches, barkMat, n), lm = new THREE.InstancedMesh(leaves, mat, n);
+    for (let i = 0; i < n; i++) {
+      const side = srnd() < 0.5 ? -1 : 1, x = side * srnd(7, 34), z = srnd(-58, 8), sc = srnd(1.6, 3.2) / height;
+      M0.compose(V.set(x, groundH(x, z) - 0.1, z), Q0.setFromAxisAngle(UP, srnd(0, TAU)), V2.set(sc, sc * srnd(0.8, 1.15), sc));
+      bm.setMatrixAt(i, M0); lm.setMatrixAt(i, M0); lm.setColorAt(i, C0.setHSL(0.24, 0.14, srnd(0.78, 1)));
+    }
+    bm.castShadow = lm.castShadow = Q.shadow > 0; bm.frustumCulled = lm.frustumCulled = false; scene.add(bm, lm); leafMeshes.push(lm);
+  });
 
   // nests on branches reaching in from the big trees
   const twigs = [];
@@ -485,10 +518,10 @@ function buildFrame() {                             // branches that overhang th
     add(22, u => ({ x: side * lerp(1.2, 0.74, u), y: -1.12 + (1 - u) * srnd(0, 0.34), d: srnd(2.8, 4.6), s: srnd(0.26, 0.42), r: srnd(0, 6.28), rx: srnd(-0.5, 0.5), ry: srnd(-0.5, 0.5), l: srnd(0.3, 0.72) }));
   }
   const n = frameItems.length, g = new THREE.PlaneGeometry(1, 1), aN = new Float32Array(n * 3), aP = new Float32Array(n);
-  frameMat = windify(new THREE.MeshStandardMaterial({ map: TEX.leaves || leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), 'frame');
+  frameMat = windify(new THREE.MeshStandardMaterial({ map: TEX.leaf_oak || leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.78, metalness: 0 }), 'frame');
   frameMesh = new THREE.InstancedMesh(g, frameMat, n);
   frameItems.forEach((it, i) => {
-    frameMesh.setColorAt(i, C0.copy(pick(GREENS)).multiplyScalar(it.l)); aP[i] = srnd();
+    frameMesh.setColorAt(i, TEX.leaf_oak ? C0.setHSL(0.24, 0.1, lerp(0.5, 0.95, it.l)) : C0.copy(pick(GREENS)).multiplyScalar(it.l)); aP[i] = srnd();
     aN.set([it.x * 0.35, 0.72, 0.6], i * 3);
   });
   g.setAttribute('aN', new THREE.InstancedBufferAttribute(aN, 3)); g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(aP, 1));
@@ -583,6 +616,47 @@ const KINDS = {                                    // anim is how fast the model
 };
 const birdModels = {}, pools = { finch: [], swift: [], raven: [], egg: [], gold: [] };
 let eggGeo, eggMats;
+const flora = {};
+async function loadFlora() {                        // grass clump and wildflowers from the EZ-Tree demo (MIT, Daniel Greenheck)
+  const loader = new GLTFLoader();
+  await Promise.all(['grass', 'flower_white', 'flower_yellow', 'flower_blue'].map(n =>
+    loader.loadAsync(new URL(`./models/${n}.glb`, import.meta.url).href).then(gl => { gl.scene.updateMatrixWorld(true); flora[n] = gl.scene; }, () => {})));
+}
+function buildMeadow() {                            // a carpet of photographed grass clumps over the clearing, wildflowers through it
+  if (!flora.grass) return;
+  let src; flora.grass.traverse(o => { if (o.isMesh) src = o; });
+  const g = src.geometry.clone().applyMatrix4(src.matrixWorld); g.computeBoundingBox();
+  const b = g.boundingBox, hgt = b.max.y - b.min.y;
+  g.translate(-(b.max.x + b.min.x) / 2, -b.min.y, -(b.max.z + b.min.z) / 2); g.scale(1 / hgt, 1 / hgt, 1 / hgt);      // unit height, root at 0
+  const n = Q.meadow, aN = new Float32Array(n * 3), aP = new Float32Array(n);
+  const mat = windify(new THREE.MeshStandardMaterial({ map: src.material.map, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.85, metalness: 0 }), 'clump');
+  const mesh = new THREE.InstancedMesh(g, mat, n), lush = hex('#5f9a34', '#4c8a2c', '#78a83c', '#3f7a2a'), dry = new THREE.Color('#b3b45c');
+  for (let i = 0; i < n; i++) {                     // thickest in front of the player, thinning into the trees
+    const far = srnd() ** 1.7, z = lerp(12.4, -66, far), span = lerp(13, 42, far), x = srnd(-span, span), path = Math.abs(x - Math.sin(z * 0.06) * 3.2);
+    if (path < 1.3 && srnd() < 0.85) { i--; continue; }
+    const patch = 0.6 + 0.8 * fbm(x * 0.12 + 3, z * 0.12), h = srnd(0.32, 0.72) * patch * (path < 2.6 ? 0.6 : 1) * lerp(1, 1.5, far), w = h * srnd(1.1, 1.7);
+    mesh.setMatrixAt(i, M0.compose(V.set(x, groundH(x, z) - 0.03, z), Q0.setFromAxisAngle(UP, srnd(0, TAU)), V2.set(w, h, w)));
+    mesh.setColorAt(i, C0.copy(pick(lush)).lerp(dry, srnd() < 0.15 ? srnd(0.3, 0.6) : srnd(0, 0.15)).multiplyScalar(srnd(0.85, 1.15)));
+    aN.set([srnd(-0.2, 0.2), 1, srnd(-0.2, 0.2)], i * 3); aP[i] = srnd();
+  }
+  g.setAttribute('aN', new THREE.InstancedBufferAttribute(aN, 3)); g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(aP, 1));
+  mesh.frustumCulled = false; mesh.receiveShadow = Q.shadow > 0; scene.add(mesh); meadowMesh = mesh;
+
+  for (const kind of ['flower_white', 'flower_yellow', 'flower_blue']) {      // each part of a flower is one instanced draw
+    const fs = flora[kind]; if (!fs) continue;
+    const box = new THREE.Box3().setFromObject(fs), k = Math.round(lerp(18, 50, Q.leaves)), spots = [];
+    for (let i = 0; i < k; i++) {
+      const far = srnd() ** 1.6, z = lerp(11, -46, far), x = (srnd() < 0.5 ? -1 : 1) * srnd(2.6, lerp(12, 30, far)), sc = srnd(0.32, 0.5) / (box.max.y - box.min.y);
+      spots.push(new THREE.Matrix4().compose(V.set(x, groundH(x, z) - 0.02, z), Q0.setFromAxisAngle(UP, srnd(0, TAU)), V2.setScalar(sc)));
+    }
+    fs.traverse(o => {
+      if (!o.isMesh) return;
+      const im = new THREE.InstancedMesh(o.geometry, o.material, k);
+      spots.forEach((m, i) => im.setMatrixAt(i, M0.multiplyMatrices(m, o.matrixWorld)));
+      im.frustumCulled = false; scene.add(im);
+    });
+  }
+}
 async function loadBirds() {                        // Parrot, Flamingo and Stork by mirada (ro.me), from the three.js examples, MIT
   const loader = new GLTFLoader(), mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 });
   await Promise.all(Object.entries(KINDS).map(async ([kind, K]) => {
@@ -1609,7 +1683,7 @@ function resize() {
   sparkPts.material.uniforms.uScale.value = pointScale; smokePts.material.uniforms.uScale.value = pointScale; fireflies.material.uniforms.uScale.value = pointScale;
   layoutFrame();
 }
-window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(resize, 120); });
+window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (state !== 'load') resize(); }, 120); });     // boot sizes everything itself once it's built
 async function buildPost() {                        // only the top tier draws through a composer, for ambient occlusion
   if (!Q.post) return;
   const target = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: Q.samples });
@@ -1628,7 +1702,7 @@ function stepDown() {                               // once resolution is at its
   perf.step++;
   if (perf.step === 1 && composer) { composer.dispose(); composer = null; Q.post = false; }
   else if (perf.step === 2 && renderer.shadowMap.enabled) { sun.castShadow = false; renderer.shadowMap.enabled = false; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
-  else if (perf.step === 3) { for (const m of leafMeshes) m.count = Math.floor(m.instanceMatrix.count * 0.66); grassMesh.count = Math.floor(grassMesh.instanceMatrix.count * 0.5); }
+  else if (perf.step === 3) { if (meadowMesh) meadowMesh.count = Math.floor(meadowMesh.instanceMatrix.count * 0.55); grassMesh.count = Math.floor(grassMesh.instanceMatrix.count * 0.5); }
   else if (perf.step >= 4) { perf.locked = true; store.set('klak.forest.q', Math.max(0, tier - 1)); }
   perf.skip = 50;
 }
@@ -1682,7 +1756,7 @@ function renderIcons() {                            // the menu's little portrai
 async function boot() {
   W = window.innerWidth; H = window.innerHeight;
   applySky(0);
-  await loadWorld(); buildGround(); await nap(); buildTrees(); await nap(); buildGrass(); buildFrame(); await nap(); buildAir(); buildFx();
+  await loadWorld(); buildGround(); await nap(); buildTrees(); await nap(); await loadFlora(); buildMeadow(); buildGrass(); buildFrame(); await nap(); buildAir(); buildFx();
   await loadBirds(); buildEggs(); buildShell(); buildSling();
   renderIcons();
   await buildPost(); resize();
@@ -1694,3 +1768,4 @@ async function boot() {
   requestAnimationFrame(frame);
 }
 boot();
+
